@@ -39,4 +39,5 @@ export default function App() {
       </div>
     </SidebarProvider>
   );
-}
+}git add .
+git commit -m "add projeto meu-chat"
