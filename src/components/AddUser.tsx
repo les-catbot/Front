@@ -195,7 +195,7 @@ const AddUser = () => {
               <div className="pt-2">
                 <Button
                   type="submit"
-                  className="w-full h-11 text-sm font-medium bg-[#E6EDF1]"
+                  className="w-full h-11 text-sm font-medium bg-[#E6EDF2]"
                 >
                   Salvar usuário
                 </Button>
