@@ -163,7 +163,7 @@ export const columns: ColumnDef<ApiUser>[] = [
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
-
+              
               <EditUser user={{ id: user.id }}>
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}

@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import {
   Sheet,
   SheetTrigger,
@@ -5,14 +8,10 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "./ui/sheet";
+} from "../components/ui/sheet";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-
-import { Input } from "./ui/input";
-import { Plus } from "lucide-react";
-import { useState } from "react";
-import { Button } from "./ui/button";
 import {
   Form,
   FormControl,
@@ -21,19 +20,15 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from "./ui/form";
-import { useForm } from "react-hook-form";
+} from "../components/ui/form";
+import { Input } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { Plus, Eye, EyeOff } from "lucide-react";
 
 const PERFIL_IDS = {
   admin: "00000000-0000-0000-0000-000000000001",
   padrao: "00000000-0000-0000-0000-000000000002",
 } as const;
-
-const inputClassName =
-  "h-11 rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm transition-all duration-200 outline-none hover:border-slate-400 focus-visible:border-slate-500 focus-visible:ring-4 focus-visible:ring-slate-200";
-
-const selectClassName =
-  "h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm transition-all duration-200 outline-none hover:border-slate-400 focus:border-slate-500 focus:ring-4 focus:ring-slate-200";
 
 const formSchema = z.object({
   nome: z
@@ -68,14 +63,13 @@ type CreateUserResponse = {
 
 type AddUserProps = {
   onUserCreated?: () => Promise<void> | void;
+  children?: React.ReactNode;
 };
 
-const AddUser = ({ onUserCreated }: AddUserProps) => {
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState<string | null>(
-    null,
-  );
+const AddUser = ({ onUserCreated, children }: AddUserProps) => {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -89,8 +83,7 @@ const AddUser = ({ onUserCreated }: AddUserProps) => {
 
   const onSubmit = async (values: FormValues) => {
     try {
-      setStatus("idle");
-      setGeneratedPassword(null);
+      setLoading(true);
 
       const payload = {
         nome: values.nome,
@@ -108,17 +101,19 @@ const AddUser = ({ onUserCreated }: AddUserProps) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error("Erro da API:", errorData);
         throw new Error("Erro ao cadastrar o usuário!");
       }
 
       const data: CreateUserResponse = await response.json();
 
-      setGeneratedPassword(data.senha ?? data.senha_provisoria ?? null);
-      setStatus("success");
+      alert(
+        data.senha || data.senha_provisoria
+          ? `Usuário cadastrado com sucesso! Senha: ${data.senha ?? data.senha_provisoria}`
+          : "Usuário cadastrado com sucesso!",
+      );
 
-      await onUserCreated?.();
+      setOpen(false);
+      setShowPassword(false);
 
       form.reset({
         nome: "",
@@ -127,160 +122,170 @@ const AddUser = ({ onUserCreated }: AddUserProps) => {
         perfil: "padrao",
       });
 
-      setSheetOpen(false);
+      onUserCreated?.();
     } catch (error) {
       console.error(error);
-      setStatus("error");
+      alert("Erro ao cadastrar o usuário.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+
+        if (!value) {
+          setShowPassword(false);
+          form.reset({
+            nome: "",
+            email: "",
+            senha: "",
+            perfil: "padrao",
+          });
+        }
+      }}
+    >
       <SheetTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Usuário
-        </Button>
+        {children || (
+          <Button variant="ghost" size="sm" className="flex items-center gap-1">
+            <Plus className="h-4 w-4" />
+            Novo Usuário
+          </Button>
+        )}
       </SheetTrigger>
 
-      <SheetContent className="overflow-y-auto bg-white px-6 py-8 sm:max-w-md">
-        <div className="w-full">
-          <SheetHeader className="mb-8 px-0 text-left">
-            <SheetTitle className="text-xl font-semibold leading-none tracking-tight">
-              Adicionar Novo Usuário
-            </SheetTitle>
-            <SheetDescription className="pt-1 text-sm text-slate-500">
-              Preencha os dados do novo usuário.
-            </SheetDescription>
-          </SheetHeader>
+      <SheetContent className="overflow-y-auto border-white/20 bg-white/75 backdrop-blur-md">
+        <SheetHeader>
+          <SheetTitle className="mb-4">Adicionar Usuário</SheetTitle>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="nome"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-sm font-medium text-slate-800">
-                      Nome completo
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Ex: João da Silva"
-                        className={inputClassName}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs text-slate-500">
-                      Insira o nome completo do usuário.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-sm font-medium text-slate-800">
-                      E-mail
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        placeholder="exemplo@email.com"
-                        className={inputClassName}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs text-slate-500">
-                      Insira um e-mail válido.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="senha"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-sm font-medium text-slate-800">
-                      Senha
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="Digite a senha"
-                        className={inputClassName}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs text-slate-500">
-                      A senha deve ter pelo menos 6 caracteres.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="perfil"
-                render={({ field }) => (
-                  <FormItem className="space-y-2">
-                    <FormLabel className="text-sm font-medium text-slate-800">
-                      Perfil
-                    </FormLabel>
-                    <FormControl>
-                      <select
-                        className={selectClassName}
-                        value={field.value}
-                        onChange={field.onChange}
-                      >
-                        <option value="padrao">Usuário Padrão</option>
-                        <option value="admin">Administrador</option>
-                      </select>
-                    </FormControl>
-                    <FormDescription className="text-xs text-slate-500">
-                      Escolha o perfil de acesso do usuário.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {status === "success" && (
-                <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                  <p>Usuário cadastrado com sucesso!</p>
-                  {generatedPassword && (
-                    <p className="mt-1">
-                      <strong>Senha gerada:</strong> {generatedPassword}
-                    </p>
+          <SheetDescription asChild>
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
+                <FormField
+                  control={form.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome do Usuário</FormLabel>
+                      <FormControl>
+                        <Input className="bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
+                          placeholder="Digite o nome do usuário"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Insira o nome completo do usuário.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-              )}
+                />
 
-              {status === "error" && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  Erro ao cadastrar o usuário!
-                </div>
-              )}
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>E-mail</FormLabel>
+                      <FormControl>
+                        <Input className="bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
+                          type="email"
+                          placeholder="Digite o e-mail"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Insira um e-mail válido.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  className="h-11 w-full bg-[#E6EDF2] text-sm font-medium text-slate-800 hover:bg-[#d9e3ea]"
-                >
-                  Salvar usuário
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </div>
+                <FormField
+                  control={form.control}
+                  name="senha"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input 
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Digite a senha"
+                            {...field}
+                            className="pr-10 bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
+                            autoComplete="new-password"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((prev) => !prev)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            aria-label={
+                              showPassword ? "Ocultar senha" : "Mostrar senha"
+                            }
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Digite a senha do novo usuário.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="perfil"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Perfil</FormLabel>
+                      <FormControl>
+                        <select
+                          value={field.value}
+                          onChange={field.onChange}
+                          className="flex h-10 w-full rounded-md border border-input bg-white/70 px-3 py-2 text-sm backdrop-blur-sm"
+                        >
+                          <option value="padrao">Usuário Padrão</option>
+                          <option value="admin">Administrador</option>
+                        </select>
+                      </FormControl>
+                      <FormDescription>
+                        Escolha o perfil do usuário.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="bg-[#457B9D] text-white font-medium hover:bg-[#457BAD]"
+                  >
+                    {loading ? "Salvando..." : "Salvar Usuário"}
+                  </Button>
+
+                </div>
+              </form>
+            </Form>
+          </SheetDescription>
+        </SheetHeader>
       </SheetContent>
     </Sheet>
   );

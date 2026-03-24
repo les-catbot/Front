@@ -23,7 +23,7 @@ import {
 } from "../components/ui/form";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Pencil } from "lucide-react";
+import { Pencil, Eye, EyeOff } from "lucide-react";
 
 const PERFIL_IDS = {
   admin: "00000000-0000-0000-0000-000000000001",
@@ -72,6 +72,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingUser, setLoadingUser] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -89,13 +90,14 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
 
       try {
         setLoadingUser(true);
+        setShowPassword(false);
 
         const response = await fetch(
           `http://localhost:8000/api/v1/usuarios/${user.id}`,
           {
             method: "GET",
             headers: { "Content-Type": "application/json" },
-          }
+          },
         );
 
         if (!response.ok) {
@@ -134,7 +136,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
         nome: values.nome,
         email: values.email,
         perfil_id: PERFIL_IDS[values.perfil],
-        ...(values.senha ? { senha: values.senha } : {}),
+        ...(values.senha?.trim() ? { senha: values.senha } : {}),
       };
 
       const response = await fetch(
@@ -143,7 +145,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -152,6 +154,8 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
 
       alert("Usuário atualizado com sucesso!");
       setOpen(false);
+      setShowPassword(false);
+      form.setValue("senha", "");
       onUserUpdated?.();
     } catch (error) {
       console.error(error);
@@ -162,7 +166,17 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
   };
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+
+        if (!value) {
+          setShowPassword(false);
+          form.setValue("senha", "");
+        }
+      }}
+    >
       <SheetTrigger asChild>
         {children || (
           <Button variant="ghost" size="sm" className="flex items-center gap-1">
@@ -172,7 +186,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
         )}
       </SheetTrigger>
 
-      <SheetContent className="overflow-y-auto">
+      <SheetContent className="overflow-y-auto border-white/20 bg-white/75 backdrop-blur-md">
         <SheetHeader>
           <SheetTitle className="mb-4">Editar Usuário</SheetTitle>
 
@@ -196,6 +210,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
                           <FormLabel>Nome do Usuário</FormLabel>
                           <FormControl>
                             <Input
+                            className="bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
                               placeholder="Digite o nome do usuário"
                               {...field}
                             />
@@ -216,6 +231,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
                           <FormLabel>E-mail</FormLabel>
                           <FormControl>
                             <Input
+                            className="bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
                               type="email"
                               placeholder="Digite o e-mail"
                               {...field}
@@ -236,15 +252,36 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
                         <FormItem>
                           <FormLabel>Senha</FormLabel>
                           <FormControl>
-                            <Input
-                              type="password"
-                              placeholder="Digite uma nova senha"
-                              {...field}
-                              value={field.value ?? ""}
-                            />
+                            <div className="relative">
+                              <Input 
+                                type={showPassword ? "text" : "password"}
+                                placeholder=" "
+                                {...field}
+                                value={field.value ?? ""}
+                                className="pr-10 bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
+                                autoComplete="new-password"
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                aria-label={
+                                  showPassword
+                                    ? "Ocultar senha"
+                                    : "Mostrar senha"
+                                }
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
                           </FormControl>
                           <FormDescription>
-                            Deixe em branco para manter a senha atual.
+                            Digite a nova senha.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -261,7 +298,7 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
                             <select
                               value={field.value}
                               onChange={field.onChange}
-                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              className="flex h-10 w-full rounded-md border border-input bg-white/70 px-3 py-2 text-sm backdrop-blur-sm"
                             >
                               <option value="padrao">Usuário Padrão</option>
                               <option value="admin">Administrador</option>
@@ -276,14 +313,21 @@ const EditUser = ({ user, onUserUpdated, children }: EditUserProps) => {
                     />
 
                     <div className="flex gap-2">
-                      <Button type="submit" disabled={loading}>
+                      <Button
+                        type="submit"
+                        disabled={loading}
+                        className="bg-[#457B9D] text-white font-medium hover:bg-[#457BAD]">
                         {loading ? "Salvando..." : "Salvar Alterações"}
                       </Button>
 
                       <Button
                         type="button"
-                        variant="ghost"
-                        onClick={() => setOpen(false)}
+                        className="bg-red-500 text-white font-medium hover:bg-red-600"
+                        onClick={() => {
+                          setOpen(false);
+                          setShowPassword(false);
+                          form.setValue("senha", "");
+                        }}
                       >
                         Cancelar
                       </Button>
