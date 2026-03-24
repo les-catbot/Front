@@ -19,15 +19,25 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import EditUser from "../../components/EditUser";
 
-export type User = {
+export type ApiUser = {
   id: string;
-  name: string;
-  username: string;
+  nome: string;
   email: string;
+  perfil_id?: string | null;
+  perfil?: {
+    id: string;
+    nome: string;
+  } | null;
 };
 
-export const columns: ColumnDef<User>[] = [
+const PERFIL_LABELS: Record<string, string> = {
+  "00000000-0000-0000-0000-000000000001": "Administrador",
+  "00000000-0000-0000-0000-000000000002": "Usuário Padrão",
+};
+
+export const columns: ColumnDef<ApiUser>[] = [
   {
     id: "select",
     header: ({ table }) => (
@@ -50,41 +60,79 @@ export const columns: ColumnDef<User>[] = [
     size: 32,
   },
   {
-    accessorKey: "name",
+    accessorKey: "nome",
     header: ({ column }) => (
       <Button
         variant="ghost"
         onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="p-0 text-sm text-gray-600 hover:bg-transparent"
+        className="p-0 text-sm text-gray-700 hover:bg-transparent"
       >
         Nome
         <ArrowUpDown className="ml-1 h-3 w-3 text-gray-400" />
       </Button>
     ),
     cell: ({ row }) => (
-      <div className="text-sm text-gray-800">{row.getValue("name")}</div>
-    ),
-  },
-  {
-    accessorKey: "username",
-    header: () => <div className="text-sm text-gray-500">Usuário</div>,
-    cell: ({ row }) => (
-      <div className="text-sm text-gray-700">{row.getValue("username")}</div>
+      <div className="text-sm text-gray-800">{row.getValue("nome")}</div>
     ),
   },
   {
     accessorKey: "email",
-    header: () => <div className="text-sm text-gray-500">Email</div>,
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        className="p-0 text-sm text-gray-700 hover:bg-transparent"
+      >
+        Email
+        <ArrowUpDown className="ml-1 h-3 w-3 text-gray-400" />
+      </Button>
+    ),
     cell: ({ row }) => (
-      <div className="text-sm text-gray-700 truncate">
+      <div className="max-w-[260px] truncate text-sm text-gray-700">
         {row.getValue("email")}
       </div>
     ),
   },
   {
+    id: "perfil",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        className="p-0 text-sm text-gray-700 hover:bg-transparent"
+      >
+        Perfil
+        <ArrowUpDown className="ml-1 h-3 w-3 text-gray-400" />
+      </Button>
+    ),
+    accessorFn: (row) => {
+      const perfilId = row.perfil?.id ?? row.perfil_id ?? "";
+      return PERFIL_LABELS[perfilId] ?? row.perfil?.nome ?? "Não informado";
+    },
+    cell: ({ row }) => {
+      const perfilId = row.original.perfil?.id ?? row.original.perfil_id ?? "";
+      const perfilLabel =
+        PERFIL_LABELS[perfilId] ?? row.original.perfil?.nome ?? "Não informado";
+
+      const isAdmin = perfilId === "00000000-0000-0000-0000-000000000001";
+
+      return (
+        <span
+          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+            isAdmin
+              ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
+              : "bg-slate-50 text-slate-700 ring-1 ring-slate-200"
+          }`}
+        >
+          {perfilLabel}
+        </span>
+      );
+    },
+  },
+  {
     id: "actions",
     header: () => (
-      <div className="text-xs text-gray-400 text-center">Ações</div>
+      <div className="text-center text-xs text-gray-800">Ações</div>
     ),
     cell: ({ row }) => {
       const user = row.original;
@@ -100,9 +148,9 @@ export const columns: ColumnDef<User>[] = [
 
             <DropdownMenuContent
               align="end"
-              className="bg-white border border-gray-100 shadow-md rounded-xl p-2 w-35"
+              className="w-36 rounded-xl border border-gray-100 bg-white p-2 shadow-md"
             >
-              <DropdownMenuLabel className="text-xs text-gray-500 px-2 py-1">
+              <DropdownMenuLabel className="px-2 py-1 text-xs text-gray-500">
                 Ações
               </DropdownMenuLabel>
 
@@ -116,10 +164,15 @@ export const columns: ColumnDef<User>[] = [
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-100">
-                <Pencil className="h-3.5 w-3.5 text-gray-400" />
-                Editar
-              </DropdownMenuItem>
+              <EditUser user={{ id: user.id }}>
+                <DropdownMenuItem
+                  onSelect={(e) => e.preventDefault()}
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-100 cursor-pointer"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-gray-400" />
+                  Editar
+                </DropdownMenuItem>
+              </EditUser>
 
               <DropdownMenuItem className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-red-50">
                 <Trash2 className="h-3.5 w-3.5 text-gray-400" />

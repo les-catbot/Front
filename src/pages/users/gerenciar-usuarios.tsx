@@ -1,43 +1,43 @@
+import { useEffect, useState } from "react";
 import AddUser from "../../components/AddUser";
 import { DataTable } from "./data-table";
 import { Sheet, SheetTrigger } from "../../components/ui/sheet";
-import { columns, type User } from "./columns";
+import { columns} from "./columns";
 import { useSidebar } from "../../components/ui/sidebar";
-
-const getData = (): User[] => {
-  return [
-    {
-      id: "1",
-      name: "João Silva",
-      username: "joaosilva",
-      email: "joao.silva@example.com",
-    },
-    {
-      id: "2",
-      name: "Maria Oliveira",
-      username: "mariaoliveira",
-      email: "maria.oliveira@example.com",
-    },
-    {
-      id: "3",
-      name: "Carlos Souza",
-      username: "carlossouza",
-      email: "carlos.souza@example.com",
-    },
-    {
-      id: "4",
-      name: "Ana Pereira",
-      username: "anapereira",
-      email: "ana.pereira@example.com",
-    },
-  ];
-};
+import type { User } from "../../model/User";
 
 const UsersPage = () => {
-  const data = getData();
   const { state } = useSidebar();
-
   const isCollapsed = state === "collapsed";
+
+  const [data, setData] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch("http://localhost:8000/api/v1/usuarios/");
+
+      if (!response.ok) {
+        throw new Error("Erro ao buscar usuários");
+      }
+
+      const result = await response.json();
+      setData(result);
+    } catch (err) {
+      setError("Não foi possível carregar os usuários");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   return (
     <div
@@ -51,15 +51,22 @@ const UsersPage = () => {
         </div>
 
         <Sheet>
-          <SheetTrigger asChild></SheetTrigger>
-          <div className="rounded-md bg-[#457B9D]  text-white">
-            <AddUser />
-          </div>
+          <SheetTrigger asChild>
+            <div className="rounded-md bg-[#457B9D] text-white cursor-pointer">
+              <AddUser onUserCreated={fetchUsers}/>
+            </div>
+          </SheetTrigger>
         </Sheet>
       </div>
 
       <div className="border border-black-200 rounded-lg bg-white overflow-hidden">
-        <DataTable columns={columns} data={data} />
+        {loading ? (
+          <div className="p-4">Carregando usuários...</div>
+        ) : error ? (
+          <div className="p-4 text-red-500">{error}</div>
+        ) : (
+          <DataTable columns={columns} data={data} />
+        )}
       </div>
     </div>
   );

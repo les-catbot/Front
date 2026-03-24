@@ -89,7 +89,6 @@ export function AppSidebar({
             {!isCollapsed && (
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">CatBOT</p>
-                <p className="truncate text-xs text-zinc-500">Seu assistente</p>
               </div>
             )}
           </div>
