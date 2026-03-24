@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import AddUser from "../../components/AddUser";
 import { DataTable } from "./data-table";
 import { Sheet, SheetTrigger } from "../../components/ui/sheet";
-import { columns} from "./columns";
+import { getColumns } from "./columns";
 import { useSidebar } from "../../components/ui/sidebar";
 import type { User } from "../../model/User";
 
@@ -39,6 +39,8 @@ const UsersPage = () => {
     fetchUsers();
   }, []);
 
+  const tableColumns = getColumns(fetchUsers);
+
   return (
     <div
       className={`bg-white min-h-screen p-6 transition-all duration-300 ${
@@ -53,7 +55,7 @@ const UsersPage = () => {
         <Sheet>
           <SheetTrigger asChild>
             <div className="rounded-md bg-[#457B9D] text-white cursor-pointer">
-              <AddUser onUserCreated={fetchUsers}/>
+              <AddUser onUserCreated={fetchUsers} />
             </div>
           </SheetTrigger>
         </Sheet>
@@ -65,7 +67,7 @@ const UsersPage = () => {
         ) : error ? (
           <div className="p-4 text-red-500">{error}</div>
         ) : (
-          <DataTable columns={columns} data={data} />
+          <DataTable columns={tableColumns} data={data} />
         )}
       </div>
     </div>

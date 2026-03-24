@@ -18,22 +18,33 @@ import {
   Search,
   MessageSquare,
   LogIn,
-  LogOut,
   Cat,
   LayoutDashboard,
   Database,
   Users,
   User,
   PanelLeftClose,
+  MoreHorizontal,
+  LogOut,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+
+type UserRole = "admin" | "user";
 
 type AppSidebarProps = {
   isLogged: boolean;
   onOpenLogin: () => void;
   onLogout: () => void;
+  userName?: string;
+  userRole?: UserRole;
 };
 
 const chats = [
@@ -47,11 +58,14 @@ export function AppSidebar({
   isLogged,
   onOpenLogin,
   onLogout,
+  userName = "Usuário",
+  userRole = "user",
 }: AppSidebarProps) {
   const navigate = useNavigate();
   const { toggleSidebar, isMobile, state } = useSidebar();
 
   const isCollapsed = state === "collapsed";
+  const isAdmin = userRole === "admin";
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -109,7 +123,7 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 overflow-y-auto group-data-[collapsible=icon]:px-2">
+      <SidebarContent className="overflow-y-auto px-2 group-data-[collapsible=icon]:px-2">
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -132,11 +146,11 @@ export function AppSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
 
-            {isLogged && (
+            {isLogged && isAdmin && (
               <>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => handleNavigate("/")}
+                    onClick={() => handleNavigate("/dashboard")}
                     className="h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                   >
                     <LayoutDashboard className="h-5 w-5 shrink-0" />
@@ -146,7 +160,7 @@ export function AppSidebar({
 
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => handleNavigate("/")}
+                    onClick={() => handleNavigate("/gerenciar-base")}
                     className="h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                   >
                     <Database className="h-5 w-5 shrink-0" />
@@ -199,13 +213,49 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             {isLogged ? (
-              <SidebarMenuButton
-                onClick={handleLogoutClick}
-                className="h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-              >
-                <LogOut className="h-5 w-5 shrink-0" />
-                {!isCollapsed && <span className="truncate">Sair</span>}
-              </SidebarMenuButton>
+              <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 hover:bg-white/70">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
+                    <User className="h-5 w-5 text-zinc-700" />
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-zinc-900">
+                        {userName}
+                      </p>
+                      <p className="truncate text-xs text-zinc-500">
+                        {isAdmin ? "Administrador" : "Usuário"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {!isCollapsed && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-zinc-600 hover:bg-white"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={handleLogoutClick}
+                        className="cursor-pointer"
+                      >
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             ) : (
               <SidebarMenuButton
                 onClick={onOpenLogin}

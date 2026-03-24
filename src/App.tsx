@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import GerenciarUsuarios from "./pages/users/gerenciar-usuarios";
 import { SendHorizontal } from "lucide-react";
 
+type UserRole = "admin" | "user";
+
 function Home({ isLogged }: { isLogged: boolean }) {
   return (
     <main className="flex-1">
@@ -44,20 +46,41 @@ export default function App() {
     return localStorage.getItem("isLogged") === "true";
   });
 
+  const [userRole, setUserRole] = useState<UserRole>(() => {
+    const savedRole = localStorage.getItem("userRole");
+    return savedRole === "admin" ? "admin" : "user";
+  });
+
+  const [userName, setUserName] = useState<string>(() => {
+    return localStorage.getItem("userName") || "Usuário";
+  });
+
   const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("isLogged", String(isLogged));
   }, [isLogged]);
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (role: UserRole, name: string) => {
     setIsLogged(true);
+    setUserRole(role);
+    setUserName(name);
+
+    localStorage.setItem("isLogged", "true");
+    localStorage.setItem("userRole", role);
+    localStorage.setItem("userName", name);
+
     setLoginOpen(false);
   };
 
   const handleLogout = () => {
     setIsLogged(false);
+    setUserRole("user");
+    setUserName("Usuário");
+
     localStorage.removeItem("isLogged");
+    localStorage.removeItem("userRole");
+    localStorage.removeItem("userName");
   };
 
   return (
@@ -66,6 +89,8 @@ export default function App() {
         <div className="flex min-h-screen w-full bg-[#f3f3f3]">
           <AppSidebar
             isLogged={isLogged}
+            userRole={userRole}
+            userName={userName}
             onOpenLogin={() => setLoginOpen(true)}
             onLogout={handleLogout}
           />

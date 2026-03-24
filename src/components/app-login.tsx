@@ -2,39 +2,131 @@ import React, { useState } from "react";
 import { Card, CardContent } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { X } from "lucide-react";
+import { X, Eye, EyeOff } from "lucide-react";
 
 const PRIMARY = "#457B9D";
+
+type UserRole = "admin" | "user";
+
+const PERFIS: Record<string, UserRole> = {
+  "00000000-0000-0000-0000-000000000001": "admin",
+  "00000000-0000-0000-0000-000000000002": "user",
+};
 
 type AppLoginProps = {
   open: boolean;
   onClose: () => void;
-  onLoginSuccess: () => void;
+  onLoginSuccess: (role: UserRole, name: string) => void;
 };
+
+function parseJwt(token: string) {
+  try {
+    const parts = token.split(".");
+
+    if (parts.length !== 3) return null;
+
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "="
+    );
+
+    const jsonPayload = atob(padded);
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
 
 export function AppLogin({
   open,
   onClose,
   onLoginSuccess,
 }: AppLoginProps) {
-  const [user, setUser] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   if (!open) return null;
 
-  const handleLogin = () => {
-    if (user === "adm" && password === "123") {
-      setError("");
-      onLoginSuccess();
-      return;
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8000/api/v1/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          senha,
+        }),
+      });
+
+      if (!response.ok) {
+        setError("Email ou senha estão incorretos.");
+        return;
+      }
+
+      const data = await response.json();
+      const token = data?.token || data?.access_token || data?.jwt;
+
+      if (!token) {
+        setError("Token não retornado pela API.");
+        return;
+      }
+
+      localStorage.setItem("token", token);
+
+      const payload = parseJwt(token);
+      console.log("Payload do token:", payload);
+
+      const perfilId =
+        payload?.perfil_id ||
+        payload?.profile_id ||
+        payload?.id_perfil;
+
+      const perfilNome =
+        payload?.perfil ||
+        payload?.role ||
+        payload?.tipo_perfil;
+
+      const nomeUsuario =
+        payload?.nome ||
+        payload?.name ||
+        payload?.username ||
+        payload?.email ||
+        email;
+
+      let userRole: UserRole = "user";
+
+      if (typeof perfilId === "string" && PERFIS[perfilId]) {
+        userRole = PERFIS[perfilId];
+      } else if (
+        perfilNome === "Administrador" ||
+        perfilNome === "admin" ||
+        perfilNome === "ADMIN"
+      ) {
+        userRole = "admin";
+      }
+
+      localStorage.setItem("userRole", userRole);
+      localStorage.setItem("userName", nomeUsuario);
+      localStorage.setItem("isLogged", "true");
+
+      onLoginSuccess(userRole, nomeUsuario);
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setError("Email ou senha estão incorretos.");
+    } finally {
+      setLoading(false);
     }
-
-    setError("Usuário ou senha inválidos.");
-  };
-
-  const handleForgotPassword = () => {
-    alert("Usuário: adm | Senha: 123");
   };
 
   return (
@@ -62,13 +154,13 @@ export function AppLogin({
             <div className="space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-zinc-800">
-                  Usuário
+                  Email
                 </label>
                 <Input
-                  type="text"
-                  placeholder="Digite seu usuário"
-                  value={user}
-                  onChange={(e) => setUser(e.target.value)}
+                  type="email"
+                  placeholder="Digite seu email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="h-11 rounded-xl border-zinc-300 bg-white"
                 />
               </div>
@@ -77,27 +169,28 @@ export function AppLogin({
                 <label className="mb-1.5 block text-sm font-medium text-zinc-800">
                   Senha
                 </label>
-                <Input
-                  type="password"
-                  placeholder="Digite sua senha"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 rounded-xl border-zinc-300 bg-white"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleLogin();
-                  }}
-                />
-              </div>
-            </div>
 
-            <div className="mt-2 text-right">
-              <button
-                type="button"
-                onClick={handleForgotPassword}
-                className="text-xs font-medium text-zinc-500 transition hover:text-zinc-800"
-              >
-                Esqueceu a senha?
-              </button>
+                <div className="relative">
+                  <Input
+                    type={mostrarSenha ? "text" : "password"}
+                    placeholder="Digite sua senha"
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                    className="h-11 rounded-xl border-zinc-300 bg-white pr-12"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLogin();
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setMostrarSenha(!mostrarSenha)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-700"
+                  >
+                    {mostrarSenha ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {error && (
@@ -107,10 +200,11 @@ export function AppLogin({
             <Button
               type="button"
               onClick={handleLogin}
-              className="mt-6 h-11 w-full rounded-xl text-base font-semibold text-white hover:opacity-95"
+              disabled={loading}
+              className="mt-6 h-11 w-full rounded-xl text-base font-semibold text-white hover:opacity-95 disabled:opacity-70"
               style={{ backgroundColor: PRIMARY }}
             >
-              Login
+              {loading ? "Entrando..." : "Login"}
             </Button>
           </div>
         </CardContent>

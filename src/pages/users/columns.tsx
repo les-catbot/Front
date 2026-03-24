@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
@@ -11,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../../components/ui/dropdown-menu";
-
 import {
   ArrowUpDown,
   MoreHorizontal,
@@ -20,6 +20,7 @@ import {
   Trash2,
 } from "lucide-react";
 import EditUser from "../../components/EditUser";
+import { DeleteGeneric } from "../../components/DeleteGeneric";
 
 export type ApiUser = {
   id: string;
@@ -37,7 +38,7 @@ const PERFIL_LABELS: Record<string, string> = {
   "00000000-0000-0000-0000-000000000002": "Usuário Padrão",
 };
 
-export const columns: ColumnDef<ApiUser>[] = [
+export const getColumns = (onUserUpdated: () => void): ColumnDef<ApiUser>[] => [
   {
     id: "select",
     header: ({ table }) => (
@@ -136,6 +137,29 @@ export const columns: ColumnDef<ApiUser>[] = [
     ),
     cell: ({ row }) => {
       const user = row.original;
+      const [isDeleting, setIsDeleting] = useState(false);
+      const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+      const handleDelete = async (id: string) => {
+        setIsDeleting(true);
+        try {
+          const response = await fetch(
+            `http://localhost:8000/api/v1/usuarios/${id}`,
+            {
+              method: "DELETE",
+            },
+          );
+
+          if (!response.ok) throw new Error("Erro ao excluir usuário");
+
+          onUserUpdated();
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setIsDeleting(false);
+          setIsDeleteModalOpen(false);
+        }
+      };
 
       return (
         <div className="flex justify-center">
@@ -148,7 +172,7 @@ export const columns: ColumnDef<ApiUser>[] = [
 
             <DropdownMenuContent
               align="end"
-              className="w-36 rounded-xl border border-gray-100 bg-white p-2 shadow-md"
+              className="w-36 rounded-xl border border-gray-100 bg-white text-black dark:bg-white p-2 shadow-md"
             >
               <DropdownMenuLabel className="px-2 py-1 text-xs text-gray-500">
                 Ações
@@ -163,8 +187,8 @@ export const columns: ColumnDef<ApiUser>[] = [
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
-              
-              <EditUser user={{ id: user.id }}>
+
+              <EditUser user={user} onUserUpdated={onUserUpdated}>
                 <DropdownMenuItem
                   onSelect={(e) => e.preventDefault()}
                   className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-100 cursor-pointer"
@@ -174,12 +198,30 @@ export const columns: ColumnDef<ApiUser>[] = [
                 </DropdownMenuItem>
               </EditUser>
 
-              <DropdownMenuItem className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-red-50">
+              <DropdownMenuItem
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-red-50 cursor-pointer"
+                disabled={isDeleting}
+              >
                 <Trash2 className="h-3.5 w-3.5 text-gray-400" />
-                <span className="text-red-500">Excluir</span>
+                <span className="text-red-500">
+                  {isDeleting ? "Excluindo..." : "Excluir"}
+                </span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <div>
+            <DeleteGeneric
+              isOpen={isDeleteModalOpen}
+              onClose={() => setIsDeleteModalOpen(false)}
+              title="Excluir usuário?"
+              description="Tem certeza que deseja excluir este usuário? Essa ação não pode ser desfeita."
+              confirmLabel="Sim, excluir"
+              cancelLabel="Cancelar"
+              onConfirm={() => handleDelete(user.id)}
+              isDeleting={isDeleting}
+            />
+          </div>
         </div>
       );
     },
