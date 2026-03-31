@@ -5,6 +5,7 @@ import { AppLogin } from "./components/app-login";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import GerenciarUsuarios from "./pages/users/gerenciar-usuarios";
 import { SendHorizontal } from "lucide-react";
+import GerenciarBase from "./pages/baseDados/gerenciar-page";
 
 type UserRole = "admin" | "user";
 
@@ -102,6 +103,14 @@ export default function App() {
               element={
                 <main className="flex-1">
                   <GerenciarUsuarios />
+                </main>
+              }
+            />
+            <Route
+              path="/gerenciar-base"
+              element={
+                <main className="flex-1">
+                  <GerenciarBase />
                 </main>
               }
             />
