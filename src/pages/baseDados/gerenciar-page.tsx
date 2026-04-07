@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 
 import { DataTable } from "./data-table";
 import { Sheet, SheetTrigger } from "../../components/ui/sheet";
-import { getColumns } from "./columns";
 import { useSidebar } from "../../components/ui/sidebar";
 import type { Arquivo } from "../../model/Arquivo";
 import AddArquivos from "../../components/AddArquivos";
+import { getColumns } from "./columns";
 
 type DocumentoResponse = {
   id: string;
@@ -13,6 +13,7 @@ type DocumentoResponse = {
   categoria: string;
   fonte: string;
   criado_em: string;
+  versao?: number;
 };
 
 const GerenciarBase = () => {
@@ -42,6 +43,7 @@ const GerenciarBase = () => {
         categoria: doc.categoria,
         fonte: doc.fonte,
         criadoEm: doc.criado_em,
+        versao: doc.versao ?? 1,
         ativo: true,
       }));
 
@@ -62,8 +64,8 @@ const GerenciarBase = () => {
     try {
       setData((prev) =>
         prev.map((arquivo) =>
-          arquivo.id === id ? { ...arquivo, ativo } : arquivo,
-        ),
+          arquivo.id === id ? { ...arquivo, ativo } : arquivo
+        )
       );
     } catch (error) {
       console.error(error);
@@ -81,21 +83,21 @@ const GerenciarBase = () => {
         isCollapsed ? "ml-3" : ""
       }`}
     >
-      <div className="flex justify-between items-center mb-6">
-        <div className="px-4 py-2 bg-white rounded-md w-64 border border-gray-200 shadow-sm">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="w-64 rounded-md border border-gray-200 bg-white px-4 py-2 shadow-sm">
           <h1 className="font-semibold">Base de Dados</h1>
         </div>
 
         <Sheet>
           <SheetTrigger asChild>
-            <div className="rounded-md bg-[#457B9D] text-white cursor-pointer">
+            <div className="cursor-pointer rounded-md bg-[#457B9D] text-white">
               <AddArquivos onArquivoCreated={fetchArquivos} />
             </div>
           </SheetTrigger>
         </Sheet>
       </div>
 
-      <div className="border border-black-200 rounded-lg bg-white overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-black-200 bg-white">
         {loading ? (
           <div className="p-4">Carregando arquivos...</div>
         ) : error ? (

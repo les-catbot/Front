@@ -17,7 +17,6 @@ import {
   MoreHorizontal,
   Copy,
   Trash2,
-  History,
   Pencil,
 } from "lucide-react";
 import type { Arquivo } from "../../model/Arquivo";
@@ -51,7 +50,6 @@ type ActionsCellProps = {
 function ActionsCell({
   arquivo,
   onArquivosUpdated,
-  onViewHistory,
 }: ActionsCellProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -71,7 +69,7 @@ function ActionsCell({
         throw new Error("Erro ao excluir documento");
       }
 
-      await onArquivosUpdated(); // atualiza lista
+      await onArquivosUpdated();
     } catch (error) {
       console.error("Erro ao excluir documento:", error);
     } finally {
@@ -143,7 +141,6 @@ function ActionsCell({
 export const getColumns = ({
   toggleArquivoStatus,
   onArquivosUpdated,
-  onViewHistory,
 }: GetColumnsProps): ColumnDef<Arquivo>[] => [
   {
     id: "select",
@@ -197,6 +194,24 @@ export const getColumns = ({
     cell: ({ row }) => (
       <div className="text-sm text-gray-800">
         {row.getValue("categoria")}
+      </div>
+    ),
+  },
+  {
+    accessorKey: "fonte",
+    header: ({ column }) => (
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        className="p-0 text-sm text-gray-700 hover:bg-transparent"
+      >
+        Fonte
+        <ArrowUpDown className="ml-1 h-3 w-3 text-gray-400" />
+      </Button>
+    ),
+    cell: ({ row }) => (
+      <div className="max-w-[220px] truncate text-sm text-gray-800">
+        {row.getValue("fonte")}
       </div>
     ),
   },
@@ -261,9 +276,7 @@ export const getColumns = ({
       return (
         <button
           type="button"
-          onClick={() =>
-            toggleArquivoStatus(arquivo.id, !arquivo.ativo)
-          }
+          onClick={() => toggleArquivoStatus(arquivo.id, !arquivo.ativo)}
           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
             arquivo.ativo
               ? "bg-green-50 text-green-700 ring-1 ring-green-200"
@@ -284,7 +297,6 @@ export const getColumns = ({
       <ActionsCell
         arquivo={row.original}
         onArquivosUpdated={onArquivosUpdated}
-        onViewHistory={onViewHistory}
       />
     ),
     size: 50,

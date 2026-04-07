@@ -24,6 +24,7 @@ import {
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Plus, Eye, EyeOff } from "lucide-react";
+import { ConfirmationAlert } from "./ConfirmationAlert";
 
 const PERFIL_IDS = {
   admin: "00000000-0000-0000-0000-000000000001",
@@ -46,6 +47,7 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+type StatusType = "idle" | "success" | "error";
 
 type CreateUserResponse = {
   id: string;
@@ -71,6 +73,10 @@ const AddUser = ({ onUserCreated, children }: AddUserProps) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [status, setStatus] = useState<StatusType>("idle");
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertDescription, setAlertDescription] = useState("");
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -80,6 +86,28 @@ const AddUser = ({ onUserCreated, children }: AddUserProps) => {
       perfil: "padrao",
     },
   });
+
+  const resetForm = () => {
+    setShowPassword(false);
+    form.reset({
+      nome: "",
+      email: "",
+      senha: "",
+      perfil: "padrao",
+    });
+  };
+
+  const showError = (title: string, description: string) => {
+    setAlertTitle(title);
+    setAlertDescription(description);
+    setStatus("error");
+  };
+
+  const showSuccess = (title: string, description: string) => {
+    setAlertTitle(title);
+    setAlertDescription(description);
+    setStatus("success");
+  };
 
   const onSubmit = async (values: FormValues) => {
     try {
@@ -106,188 +134,208 @@ const AddUser = ({ onUserCreated, children }: AddUserProps) => {
 
       const data: CreateUserResponse = await response.json();
 
-      alert(
+      showSuccess(
+        "Usuário cadastrado com sucesso!",
         data.senha || data.senha_provisoria
-          ? `Usuário cadastrado com sucesso! Senha: ${data.senha ?? data.senha_provisoria}`
-          : "Usuário cadastrado com sucesso!",
+          ? `Senha gerada: ${data.senha ?? data.senha_provisoria}`
+          : "O novo usuário foi adicionado ao sistema."
       );
 
-      setOpen(false);
-      setShowPassword(false);
-
-      form.reset({
-        nome: "",
-        email: "",
-        senha: "",
-        perfil: "padrao",
-      });
-
-      onUserCreated?.();
+      resetForm();
+      await onUserCreated?.();
     } catch (error) {
       console.error(error);
-      alert("Erro ao cadastrar o usuário.");
+      showError(
+        "Erro ao cadastrar o usuário!",
+        "Verifique os dados e tente novamente."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(value) => {
-        setOpen(value);
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={(value) => {
+          setOpen(value);
 
-        if (!value) {
-          setShowPassword(false);
-          form.reset({
-            nome: "",
-            email: "",
-            senha: "",
-            perfil: "padrao",
-          });
-        }
-      }}
-    >
-      <SheetTrigger asChild>
-        {children || (
-          <Button variant="ghost" size="sm" className="flex items-center gap-1">
-            <Plus className="h-4 w-4" />
-            Novo Usuário
-          </Button>
-        )}
-      </SheetTrigger>
+          if (!value) {
+            resetForm();
+          }
+        }}
+      >
+        <SheetTrigger asChild>
+          {children || (
+            <Button variant="ghost" size="sm" className="flex items-center gap-1">
+              <Plus className="h-4 w-4" />
+              Novo Usuário
+            </Button>
+          )}
+        </SheetTrigger>
 
-      <SheetContent className="overflow-y-auto border-white/20 bg-white/75 backdrop-blur-md">
-        <SheetHeader>
-          <SheetTitle className="mb-4">Adicionar Usuário</SheetTitle>
+        <SheetContent className="overflow-y-auto border-white/20 bg-white/75 backdrop-blur-md">
+          <SheetHeader>
+            <SheetTitle className="mb-4">Adicionar Usuário</SheetTitle>
 
-          <SheetDescription asChild>
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
-              >
-                <FormField
-                  control={form.control}
-                  name="nome"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome do Usuário</FormLabel>
-                      <FormControl>
-                        <Input className="bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
-                          placeholder="Digite o nome do usuário"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Insira o nome completo do usuário.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>E-mail</FormLabel>
-                      <FormControl>
-                        <Input className="bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
-                          type="email"
-                          placeholder="Digite o e-mail"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Insira um e-mail válido.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="senha"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Senha</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <Input 
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Digite a senha"
+            <SheetDescription asChild>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
+                  <FormField
+                    control={form.control}
+                    name="nome"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome do Usuário</FormLabel>
+                        <FormControl>
+                          <Input
+                            className="border border-input bg-white/70 backdrop-blur-sm transition-all duration-200 hover:border-[#457B9D]/60 focus-visible:border-[#457B9D] focus-visible:ring-2 focus-visible:ring-[#457B9D]/30"
+                            placeholder="Digite o nome do usuário"
                             {...field}
-                            className="pr-10 bg-white/70 backdrop-blur-sm border border-input transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#457B9D]/30 focus-visible:border-[#457B9D] hover:border-[#457B9D]/60"
-                            autoComplete="new-password"
                           />
+                        </FormControl>
+                        <FormDescription>
+                          Insira o nome completo do usuário.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword((prev) => !prev)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                            aria-label={
-                              showPassword ? "Ocultar senha" : "Mostrar senha"
-                            }
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>E-mail</FormLabel>
+                        <FormControl>
+                          <Input
+                            className="border border-input bg-white/70 backdrop-blur-sm transition-all duration-200 hover:border-[#457B9D]/60 focus-visible:border-[#457B9D] focus-visible:ring-2 focus-visible:ring-[#457B9D]/30"
+                            type="email"
+                            placeholder="Digite o e-mail"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Insira um e-mail válido.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="senha"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Senha</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Digite a senha"
+                              {...field}
+                              className="border border-input bg-white/70 pr-10 backdrop-blur-sm transition-all duration-200 hover:border-[#457B9D]/60 focus-visible:border-[#457B9D] focus-visible:ring-2 focus-visible:ring-[#457B9D]/30"
+                              autoComplete="new-password"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword((prev) => !prev)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                              aria-label={
+                                showPassword ? "Ocultar senha" : "Mostrar senha"
+                              }
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        </FormControl>
+                        <FormDescription>
+                          Digite a senha do novo usuário.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="perfil"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Perfil</FormLabel>
+                        <FormControl>
+                          <select
+                            value={field.value}
+                            onChange={field.onChange}
+                            className="flex h-10 w-full rounded-md border border-input bg-white/70 px-3 py-2 text-sm backdrop-blur-sm"
                           >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </FormControl>
-                      <FormDescription>
-                        Digite a senha do novo usuário.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                            <option value="padrao">Usuário Padrão</option>
+                            <option value="admin">Administrador</option>
+                          </select>
+                        </FormControl>
+                        <FormDescription>
+                          Escolha o perfil do usuário.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="perfil"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Perfil</FormLabel>
-                      <FormControl>
-                        <select
-                          value={field.value}
-                          onChange={field.onChange}
-                          className="flex h-10 w-full rounded-md border border-input bg-white/70 px-3 py-2 text-sm backdrop-blur-sm"
-                        >
-                          <option value="padrao">Usuário Padrão</option>
-                          <option value="admin">Administrador</option>
-                        </select>
-                      </FormControl>
-                      <FormDescription>
-                        Escolha o perfil do usuário.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="bg-[#457B9D] font-medium text-white hover:bg-[#457BAD]"
+                    >
+                      {loading ? "Salvando..." : "Salvar Usuário"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </SheetDescription>
+          </SheetHeader>
+        </SheetContent>
+      </Sheet>
 
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="bg-[#457B9D] text-white font-medium hover:bg-[#457BAD]"
-                  >
-                    {loading ? "Salvando..." : "Salvar Usuário"}
-                  </Button>
+      <ConfirmationAlert
+        open={status !== "idle"}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setStatus("idle");
+          }
+        }}
+        type={status === "success" ? "success" : "error"}
+        title={
+          status === "success"
+            ? "User cadastrado com sucesso!"
+            : "Erro ao cadastrar o user!"
+        }
+        description={
+          status === "success"
+            ? "O novo user foi adicionado ao sistema."
+            : "Verifique os dados e tente novamente."
+        }
+        onClose={() => {
+          setStatus("idle");
 
-                </div>
-              </form>
-            </Form>
-          </SheetDescription>
-        </SheetHeader>
-      </SheetContent>
-    </Sheet>
+          if (status === "success") {
+            setOpen(false);
+          }
+        }}
+        onCloseSheet={() => setOpen(false)}
+      />
+    </>
   );
 };
 

@@ -9,34 +9,140 @@ import GerenciarBase from "./pages/baseDados/gerenciar-page";
 
 type UserRole = "admin" | "user";
 
+type Message = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+};
+
 function Home({ isLogged }: { isLogged: boolean }) {
+  const [inputValue, setInputValue] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isSending, setIsSending] = useState(false);
+
+  const hasMessages = messages.length > 0;
+
+  const handleSendMessage = async () => {
+    const text = inputValue.trim();
+
+    if (!text || !isLogged || isSending) return;
+
+    const userMessage: Message = {
+      id: Date.now(),
+      role: "user",
+      content: text,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+    setIsSending(true);
+
+    setTimeout(() => {
+      const botMessage: Message = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content:
+          "Recebi sua mensagem. Por enquanto, a integração com respostas ainda não está pronta.",
+      };
+
+      setMessages((prev) => [...prev, botMessage]);
+      setIsSending(false);
+    }, 700);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSendMessage();
+    }
+  };
+
   return (
     <main className="flex-1">
-      <div className="relative mx-auto min-h-screen w-full max-w-5xl px-8 py-6">
-        <div className="pt-16 text-center">
-          <h1 className="font-mono text-[56px] font-black leading-[1.15] text-black">
-            Bem vindo(a)!
-            <br />
-            ao CatBot
-          </h1>
-        </div>
+      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-8 py-6">
+        {!hasMessages ? (
+          <>
+            <div className="pt-16 text-center">
+              <h1 className="font-mono text-[56px] font-black leading-[1.15] text-black">
+                Bem vindo(a)!
+                <br />
+                ao CatBot
+              </h1>
+            </div>
 
-        <div className="absolute left-1/2 top-1/2 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 px-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Com o que voce precisa de ajuda?"
-              className="h-14 w-full rounded-2xl border border-[#4a90c2] bg-white px-5 pr-16 text-[22px] text-neutral-700 outline-none placeholder:text-neutral-500"
-              disabled={!isLogged}
-            />
-            <button
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-black disabled:opacity-50"
-              disabled={!isLogged}
-            >
-              <SendHorizontal className="h-7 w-7" strokeWidth={1.8} />
-            </button>
-          </div>
-        </div>
+            <div className="flex flex-1 items-center justify-center px-4">
+              <div className="relative w-full max-w-2xl">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Com o que você precisa de ajuda?"
+                  className="h-14 w-full rounded-2xl border border-[#4a90c2] bg-white px-5 pr-16 text-[22px] text-neutral-700 outline-none placeholder:text-neutral-500"
+                  disabled={!isLogged || isSending}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-black disabled:opacity-50"
+                  disabled={!isLogged || isSending || !inputValue.trim()}
+                >
+                  <SendHorizontal className="h-7 w-7" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mb-6 flex-1 space-y-4 overflow-y-auto pt-6">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                      message.role === "user"
+                        ? "bg-[#4a90c2] text-white"
+                        : "bg-white text-neutral-800"
+                    }`}
+                  >
+                    {message.content}
+                  </div>
+                </div>
+              ))}
+
+              {isSending && (
+                <div className="flex justify-start">
+                  <div className="max-w-[75%] rounded-2xl bg-white px-4 py-3 text-sm text-neutral-500 shadow-sm">
+                    Digitando...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 bg-[#f3f3f3] pb-4 pt-2">
+              <div className="relative w-full">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Com o que você precisa de ajuda?"
+                  className="h-14 w-full rounded-2xl border border-[#4a90c2] bg-white px-5 pr-16 text-[18px] text-neutral-700 outline-none placeholder:text-neutral-500"
+                  disabled={!isLogged || isSending}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-black disabled:opacity-50"
+                  disabled={!isLogged || isSending || !inputValue.trim()}
+                >
+                  <SendHorizontal className="h-6 w-6" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </main>
   );

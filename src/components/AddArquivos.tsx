@@ -11,21 +11,26 @@ import {
 } from "../components/ui/sheet";
 import { Button } from "../components/ui/button";
 import { Plus, Upload, FileText } from "lucide-react";
+import { ConfirmationAlert } from "./ConfirmationAlert";
 
 type AddArquivosProps = {
   onArquivoCreated?: () => Promise<void> | void;
   children?: React.ReactNode;
 };
 
+type StatusType = "idle" | "success" | "error";
+
 const detectarCategoria = (file: File) => {
   const nome = file.name.toLowerCase();
 
   if (nome.includes("contrato")) return "Contratos";
   if (nome.includes("nota")) return "Notas";
-  if (nome.includes("relatorio") || nome.includes("relatório"))
+  if (nome.includes("relatorio") || nome.includes("relatório")) {
     return "Relatórios";
-  if (nome.includes("certidao") || nome.includes("certidão"))
+  }
+  if (nome.includes("certidao") || nome.includes("certidão")) {
     return "Certidões";
+  }
 
   if (file.type.includes("pdf")) return "PDF";
   if (file.type.includes("image")) return "Imagem";
@@ -40,10 +45,7 @@ const detectarCategoria = (file: File) => {
   return "Geral";
 };
 
-const AddArquivos = ({
-  onArquivoCreated,
-  children,
-}: AddArquivosProps) => {
+const AddArquivos = ({ onArquivoCreated, children }: AddArquivosProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -53,7 +55,23 @@ const AddArquivos = ({
   const [conteudo, setConteudo] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
 
+  const [status, setStatus] = useState<StatusType>("idle");
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertDescription, setAlertDescription] = useState("");
+
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const showError = (title: string, description: string) => {
+    setAlertTitle(title);
+    setAlertDescription(description);
+    setStatus("error");
+  };
+
+  const showSuccess = (title: string, description: string) => {
+    setAlertTitle(title);
+    setAlertDescription(description);
+    setStatus("success");
+  };
 
   const resetForm = () => {
     setTitulo("");
@@ -81,22 +99,22 @@ const AddArquivos = ({
 
   const onSubmit = async () => {
     if (!titulo.trim()) {
-      alert("Preencha o título.");
+      showError("Campo obrigatório", "Preencha o título.");
       return;
     }
 
     if (!categoria.trim()) {
-      alert("Preencha a categoria.");
+      showError("Campo obrigatório", "Preencha a categoria.");
       return;
     }
 
     if (!fonte.trim()) {
-      alert("Preencha a fonte.");
+      showError("Campo obrigatório", "Preencha a fonte.");
       return;
     }
 
     if (!arquivo) {
-      alert("Selecione um documento.");
+      showError("Documento obrigatório", "Selecione um documento.");
       return;
     }
 
@@ -120,178 +138,221 @@ const AddArquivos = ({
       });
 
       if (!response.ok) {
-        throw new Error("Erro ao cadastrar o documento!");
+        throw new Error("Erro ao cadastrar o documento.");
       }
 
-      alert("Documento cadastrado com sucesso!");
+      showSuccess(
+        "Arquivo cadastrado com sucesso!",
+        "O novo arquivo foi adicionado ao sistema.",
+      );
 
-      setOpen(false);
       resetForm();
-
       await onArquivoCreated?.();
     } catch (error) {
       console.error(error);
-      alert("Erro ao cadastrar o documento.");
+      showError(
+        "Erro ao cadastrar o arquivo!",
+        "Verifique os dados e tente novamente.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Sheet
-      open={open}
-      onOpenChange={(value) => {
-        setOpen(value);
+    <>
+      <Sheet
+        open={open}
+        onOpenChange={(value) => {
+          setOpen(value);
 
-        if (!value) {
-          resetForm();
-        }
-      }}
-    >
-      <SheetTrigger asChild>
-        {children || (
-          <Button variant="ghost" size="sm" className="flex items-center gap-1">
-            <Plus className="h-4 w-4" />
-            Novo Documento
-          </Button>
-        )}
-      </SheetTrigger>
+          if (!value) {
+            resetForm();
+          }
+        }}
+      >
+        <SheetTrigger asChild>
+          {children || (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Novo Documento
+            </Button>
+          )}
+        </SheetTrigger>
 
-      <SheetContent className="overflow-y-auto border-white/20 bg-white/75 backdrop-blur-md">
-        <SheetHeader>
-          <SheetTitle className="mb-4">Adicionar Documento</SheetTitle>
+        <SheetContent className="overflow-y-auto border-white/20 bg-white/75 backdrop-blur-md">
+          <SheetHeader>
+            <SheetTitle className="mb-4">Adicionar Documento</SheetTitle>
 
-          <SheetDescription asChild>
-            <div className="space-y-6">
-              {/* DOCUMENTO AGORA FICA NO TOPO */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium leading-none">
-                  Documento
-                </label>
+            <SheetDescription asChild>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium leading-none">
+                    Documento
+                  </label>
 
-                <label
-                  htmlFor="documento-upload"
-                  className="
-                    flex h-36 w-full cursor-pointer flex-col items-center justify-center gap-2
-                    rounded-xl border border-dashed border-[#457B9D]/40
-                    bg-white/70 px-4 text-center backdrop-blur-sm
-                    transition-all duration-200
-                    hover:border-[#457B9D] hover:bg-white/90
-                  "
-                >
-                  <Upload className="h-6 w-6 text-[#457B9D]" />
+                  <label
+                    htmlFor="documento-upload"
+                    className="
+                      flex h-36 w-full cursor-pointer flex-col items-center justify-center gap-2
+                      rounded-xl border border-dashed border-[#457B9D]/40
+                      bg-white/70 px-4 text-center backdrop-blur-sm
+                      transition-all duration-200
+                      hover:border-[#457B9D] hover:bg-white/90
+                    "
+                  >
+                    <Upload className="h-6 w-6 text-[#457B9D]" />
 
-                  <span className="text-sm font-semibold text-foreground">
-                    Escolher documento
-                  </span>
-
-                  <span className="text-xs text-muted-foreground">
-                    Clique aqui para selecionar um arquivo do computador
-                  </span>
-
-                  <input
-                    id="documento-upload"
-                    ref={inputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </label>
-
-                <p className="text-sm text-muted-foreground">
-                  O envio do documento é obrigatório.
-                </p>
-
-                {arquivo && (
-                  <div className="flex items-center gap-2 rounded-lg border border-[#457B9D]/20 bg-white/60 px-3 py-3 text-sm text-muted-foreground">
-                    <FileText className="h-4 w-4 text-[#457B9D]" />
-                    <span>
-                      Documento selecionado:{" "}
-                      <span className="font-medium text-foreground">
-                        {arquivo.name}
-                      </span>
+                    <span className="text-sm font-semibold text-foreground">
+                      Escolher documento
                     </span>
-                  </div>
-                )}
-              </div>
 
-              <div className="space-y-2">
-                <label htmlFor="titulo" className="text-sm font-medium leading-none">
-                  Título
-                </label>
-                <input
-                  id="titulo"
-                  type="text"
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
-                  placeholder="Digite o título"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
+                    <span className="text-xs text-muted-foreground">
+                      Clique aqui para selecionar um arquivo do computador
+                    </span>
 
-              <div className="space-y-2">
-                <label
-                  htmlFor="categoria"
-                  className="text-sm font-medium leading-none"
-                >
-                  Categoria
-                </label>
-                <input
-                  id="categoria"
-                  type="text"
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
-                  placeholder="Digite a categoria"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
+                    <input
+                      id="documento-upload"
+                      ref={inputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                  </label>
 
-              <div className="space-y-2">
-                <label htmlFor="fonte" className="text-sm font-medium leading-none">
-                  Fonte
-                </label>
-                <input
-                  id="fonte"
-                  type="text"
-                  value={fonte}
-                  onChange={(e) => setFonte(e.target.value)}
-                  placeholder="Digite a fonte"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
+                  <p className="text-sm text-muted-foreground">
+                    O envio do documento é obrigatório.
+                  </p>
 
-              <div className="space-y-2">
-                <label
-                  htmlFor="conteudo"
-                  className="text-sm font-medium leading-none"
-                >
-                  Conteúdo
-                </label>
-                <textarea
-                  id="conteudo"
-                  value={conteudo}
-                  onChange={(e) => setConteudo(e.target.value)}
-                  placeholder="Digite o conteúdo (opcional)"
-                  className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                />
-              </div>
+                  {arquivo && (
+                    <div className="flex items-center gap-2 rounded-lg border border-[#457B9D]/20 bg-white/60 px-3 py-3 text-sm text-muted-foreground">
+                      <FileText className="h-4 w-4 text-[#457B9D]" />
+                      <span>
+                        Documento selecionado:{" "}
+                        <span className="font-medium text-foreground">
+                          {arquivo.name}
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                </div>
 
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  onClick={onSubmit}
-                  disabled={loading}
-                  className="bg-[#457B9D] font-medium text-white hover:bg-[#457BAD]"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  {loading ? "Salvando..." : "Salvar Documento"}
-                </Button>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="titulo"
+                    className="text-sm font-medium leading-none"
+                  >
+                    Título
+                  </label>
+                  <input
+                    id="titulo"
+                    type="text"
+                    value={titulo}
+                    onChange={(e) => setTitulo(e.target.value)}
+                    placeholder="Digite o título"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="categoria"
+                    className="text-sm font-medium leading-none"
+                  >
+                    Categoria
+                  </label>
+                  <input
+                    id="categoria"
+                    type="text"
+                    value={categoria}
+                    onChange={(e) => setCategoria(e.target.value)}
+                    placeholder="Digite a categoria"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="fonte"
+                    className="text-sm font-medium leading-none"
+                  >
+                    Fonte
+                  </label>
+                  <input
+                    id="fonte"
+                    type="text"
+                    value={fonte}
+                    onChange={(e) => setFonte(e.target.value)}
+                    placeholder="Digite a fonte"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="conteudo"
+                    className="text-sm font-medium leading-none"
+                  >
+                    Conteúdo
+                  </label>
+                  <textarea
+                    id="conteudo"
+                    value={conteudo}
+                    onChange={(e) => setConteudo(e.target.value)}
+                    placeholder="Digite o conteúdo (opcional)"
+                    className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={onSubmit}
+                    disabled={loading}
+                    className="bg-[#457B9D] font-medium text-white hover:bg-[#457BAD]"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {loading ? "Salvando..." : "Salvar Documento"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </SheetDescription>
-        </SheetHeader>
-      </SheetContent>
-    </Sheet>
+            </SheetDescription>
+          </SheetHeader>
+        </SheetContent>
+      </Sheet>
+
+      <ConfirmationAlert
+        open={status !== "idle"}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) {
+            setStatus("idle");
+          }
+        }}
+        type={status === "success" ? "success" : "error"}
+        title={
+          status === "success"
+            ? "Arquivo cadastrado com sucesso!"
+            : "Erro ao cadastrar o arquivo!"
+        }
+        description={
+          status === "success"
+            ? "O novo arquivo foi adicionado ao sistema."
+            : "Verifique os dados e tente novamente."
+        }
+        onClose={() => {
+          setStatus("idle");
+
+          if (status === "success") {
+            setOpen(false);
+          }
+        }}
+        onCloseSheet={() => setOpen(false)}
+      />
+    </>
   );
 };
 
