@@ -36,8 +36,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { useEffect, useState } from "react";
+
+const API_URL = "http://localhost:8000/api/v1";
 
 type UserRole = "admin" | "user";
+
+type Conversa = {
+  id: string;
+  usuario_id: string;
+  status_sucesso: boolean;
+  iniciado_em: string;
+  encerrado_em: string | null;
+};
 
 type AppSidebarProps = {
   isLogged: boolean;
@@ -45,14 +56,18 @@ type AppSidebarProps = {
   onLogout: () => void;
   userName?: string;
   userRole?: UserRole;
+  userId?: string | null;
+  onSelectConversa?: (conversaId: string) => void;
 };
 
-const chats = [
-  "Ideias para projeto",
-  "Planejamento da semana",
-  "Layout do app",
-  "Tela de login",
-];
+function formatarData(iso: string) {
+  const date = new Date(iso);
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
 
 export function AppSidebar({
   isLogged,
@@ -60,6 +75,8 @@ export function AppSidebar({
   onLogout,
   userName = "Usuário",
   userRole = "user",
+  userId,
+  onSelectConversa,
 }: AppSidebarProps) {
   const navigate = useNavigate();
   const { toggleSidebar, isMobile, state } = useSidebar();
@@ -67,22 +84,36 @@ export function AppSidebar({
   const isCollapsed = state === "collapsed";
   const isAdmin = userRole === "admin";
 
+  const [conversas, setConversas] = useState<Conversa[]>([]);
+
+  useEffect(() => {
+    if (!isLogged || !userId) {
+      setConversas([]);
+      return;
+    }
+
+    fetch(`${API_URL}/historico/usuarios/${userId}/conversas`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setConversas(data);
+      })
+      .catch(() => setConversas([]));
+  }, [isLogged, userId]);
+
   const handleNavigate = (path: string) => {
     navigate(path);
-
-    if (isMobile) {
-      toggleSidebar();
-    }
+    if (isMobile) toggleSidebar();
   };
 
   const handleLogoutClick = () => {
     onLogout();
-
-    if (isMobile) {
-      toggleSidebar();
-    }
-
+    if (isMobile) toggleSidebar();
     navigate("/");
+  };
+
+  const handleSelectConversa = (conversaId: string) => {
+    onSelectConversa?.(conversaId);
+    handleNavigate("/");
   };
 
   return (
@@ -186,24 +217,30 @@ export function AppSidebar({
           </SidebarMenu>
         </SidebarGroup>
 
-        {!isCollapsed && (
+        {!isCollapsed && isLogged && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="px-3 text-xs font-medium text-zinc-500">
               Seus chats
             </SidebarGroupLabel>
 
             <SidebarMenu className="mt-2 space-y-1">
-              {chats.map((chat) => (
-                <SidebarMenuItem key={chat}>
-                  <SidebarMenuButton
-                    onClick={() => handleNavigate("/")}
-                    className="h-10 rounded-xl px-3 hover:bg-white/70"
-                  >
-                    <MessageSquare className="h-5 w-5 shrink-0" />
-                    <span className="truncate">{chat}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {conversas.length === 0 ? (
+                <p className="px-3 text-xs text-zinc-400">Nenhuma conversa ainda.</p>
+              ) : (
+                conversas.map((conversa) => (
+                  <SidebarMenuItem key={conversa.id}>
+                    <SidebarMenuButton
+                      onClick={() => handleSelectConversa(conversa.id)}
+                      className="h-10 rounded-xl px-3 hover:bg-white/70"
+                    >
+                      <MessageSquare className="h-5 w-5 shrink-0" />
+                      <span className="truncate">
+                        Chat de {formatarData(conversa.iniciado_em)}
+                      </span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
+              )}
             </SidebarMenu>
           </SidebarGroup>
         )}

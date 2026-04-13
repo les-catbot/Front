@@ -16,34 +16,26 @@ const PERFIS: Record<string, UserRole> = {
 type AppLoginProps = {
   open: boolean;
   onClose: () => void;
-  onLoginSuccess: (role: UserRole, name: string) => void;
+  onLoginSuccess: (role: UserRole, name: string, id?: string) => void;
 };
 
 function parseJwt(token: string) {
   try {
     const parts = token.split(".");
-
     if (parts.length !== 3) return null;
-
     const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
     const padded = base64.padEnd(
       base64.length + ((4 - (base64.length % 4)) % 4),
       "="
     );
-
-    const jsonPayload = atob(padded);
-    return JSON.parse(jsonPayload);
+    return JSON.parse(atob(padded));
   } catch {
     return null;
   }
 }
 
-export function AppLogin({
-  open,
-  onClose,
-  onLoginSuccess,
-}: AppLoginProps) {
+export function AppLogin({ open, onClose, onLoginSuccess }: AppLoginProps) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [mostrarSenha, setMostrarSenha] = useState(false);
@@ -59,13 +51,8 @@ export function AppLogin({
     try {
       const response = await fetch("http://localhost:8000/api/v1/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          senha,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, senha }),
       });
 
       if (!response.ok) {
@@ -86,25 +73,22 @@ export function AppLogin({
       const payload = parseJwt(token);
       console.log("Payload do token:", payload);
 
-      const perfilId =
-        payload?.perfil_id ||
-        payload?.profile_id ||
-        payload?.id_perfil;
+      // extrai o ID do usuário — tenta os campos mais comuns
+      const userId: string | undefined =
+        payload?.sub ||
+        payload?.id ||
+        payload?.usuario_id ||
+        payload?.user_id ||
+        data?.usuario_id ||
+        data?.id ||
+        undefined;
 
-      const perfilNome =
-        payload?.perfil ||
-        payload?.role ||
-        payload?.tipo_perfil;
-
+      const perfilId = payload?.perfil_id || payload?.profile_id || payload?.id_perfil;
+      const perfilNome = payload?.perfil || payload?.role || payload?.tipo_perfil;
       const nomeUsuario =
-        payload?.nome ||
-        payload?.name ||
-        payload?.username ||
-        payload?.email ||
-        email;
+        payload?.nome || payload?.name || payload?.username || payload?.email || email;
 
       let userRole: UserRole = "user";
-
       if (typeof perfilId === "string" && PERFIS[perfilId]) {
         userRole = PERFIS[perfilId];
       } else if (
@@ -115,11 +99,12 @@ export function AppLogin({
         userRole = "admin";
       }
 
+      if (userId) localStorage.setItem("userId", userId);
       localStorage.setItem("userRole", userRole);
       localStorage.setItem("userName", nomeUsuario);
       localStorage.setItem("isLogged", "true");
 
-      onLoginSuccess(userRole, nomeUsuario);
+      onLoginSuccess(userRole, nomeUsuario, userId);
       onClose();
     } catch (err) {
       console.error(err);
@@ -169,7 +154,6 @@ export function AppLogin({
                 <label className="mb-1.5 block text-sm font-medium text-zinc-800">
                   Senha
                 </label>
-
                 <div className="relative">
                   <Input
                     type={mostrarSenha ? "text" : "password"}
@@ -177,11 +161,8 @@ export function AppLogin({
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
                     className="h-11 rounded-xl border-zinc-300 bg-white pr-12"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleLogin();
-                    }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }}
                   />
-
                   <button
                     type="button"
                     onClick={() => setMostrarSenha(!mostrarSenha)}

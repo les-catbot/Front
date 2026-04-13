@@ -7,6 +7,8 @@ import GerenciarUsuarios from "./pages/users/gerenciar-usuarios";
 import { SendHorizontal } from "lucide-react";
 import GerenciarBase from "./pages/baseDados/gerenciar-page";
 
+const API_URL = "http://localhost:8000/api/v1";
+
 type UserRole = "admin" | "user";
 
 type Message = {
@@ -15,7 +17,17 @@ type Message = {
   content: string;
 };
 
-function Home({ isLogged }: { isLogged: boolean }) {
+function Home({
+  isLogged,
+  userId,
+  onConversaIdChange,
+  conversaId,
+}: {
+  isLogged: boolean;
+  userId: string | null;
+  onConversaIdChange: (id: string | null) => void;
+  conversaId: string | null;
+}) {
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
@@ -24,7 +36,6 @@ function Home({ isLogged }: { isLogged: boolean }) {
 
   const handleSendMessage = async () => {
     const text = inputValue.trim();
-
     if (!text || !isLogged || isSending) return;
 
     const userMessage: Message = {
@@ -37,17 +48,52 @@ function Home({ isLogged }: { isLogged: boolean }) {
     setInputValue("");
     setIsSending(true);
 
-    setTimeout(() => {
+    try {
+      let idConversa = conversaId;
+
+      if (!idConversa) {
+        const iniciar = await fetch(`${API_URL}/chat/iniciar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usuario_id: userId }),
+        });
+
+        if (!iniciar.ok) throw new Error("Erro ao iniciar conversa");
+
+        const iniciarData = await iniciar.json();
+        idConversa = iniciarData.conversa_id;
+        onConversaIdChange(idConversa);
+      }
+
+      const res = await fetch(`${API_URL}/chat/perguntar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversa_id: idConversa, texto: text }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao enviar mensagem");
+
+      const data = await res.json();
+
       const botMessage: Message = {
         id: Date.now() + 1,
         role: "assistant",
-        content:
-          "Recebi sua mensagem. Por enquanto, a integração com respostas ainda não está pronta.",
+        content: data.resposta ?? data.texto ?? data.content ?? JSON.stringify(data),
       };
 
       setMessages((prev) => [...prev, botMessage]);
+    } catch (e) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "Erro ao conectar com o servidor. Tente novamente.",
+        },
+      ]);
+    } finally {
       setIsSending(false);
-    }, 700);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -162,20 +208,32 @@ export default function App() {
     return localStorage.getItem("userName") || "Usuário";
   });
 
+  const [userId, setUserId] = useState<string | null>(() => {
+    return localStorage.getItem("userId");
+  });
+
+  const [conversaId, setConversaId] = useState<string | null>(null);
+
   const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("isLogged", String(isLogged));
   }, [isLogged]);
 
-  const handleLoginSuccess = (role: UserRole, name: string) => {
+  const handleLoginSuccess = (role: UserRole, name: string, id?: string) => {
     setIsLogged(true);
     setUserRole(role);
     setUserName(name);
+    setConversaId(null);
 
     localStorage.setItem("isLogged", "true");
     localStorage.setItem("userRole", role);
     localStorage.setItem("userName", name);
+
+    if (id) {
+      setUserId(id);
+      localStorage.setItem("userId", id);
+    }
 
     setLoginOpen(false);
   };
@@ -184,10 +242,13 @@ export default function App() {
     setIsLogged(false);
     setUserRole("user");
     setUserName("Usuário");
+    setUserId(null);
+    setConversaId(null);
 
     localStorage.removeItem("isLogged");
     localStorage.removeItem("userRole");
     localStorage.removeItem("userName");
+    localStorage.removeItem("userId");
   };
 
   return (
@@ -198,12 +259,24 @@ export default function App() {
             isLogged={isLogged}
             userRole={userRole}
             userName={userName}
+            userId={userId}
             onOpenLogin={() => setLoginOpen(true)}
             onLogout={handleLogout}
+            onSelectConversa={(id) => setConversaId(id)}
           />
 
           <Routes>
-            <Route path="/" element={<Home isLogged={isLogged} />} />
+            <Route
+              path="/"
+              element={
+                <Home
+                  isLogged={isLogged}
+                  userId={userId}
+                  conversaId={conversaId}
+                  onConversaIdChange={setConversaId}
+                />
+              }
+            />
             <Route
               path="/gerenciar-usuarios"
               element={
