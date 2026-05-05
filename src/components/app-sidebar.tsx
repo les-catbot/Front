@@ -26,6 +26,8 @@ import {
   PanelLeftClose,
   MoreHorizontal,
   LogOut,
+  X,
+  CalendarSearch,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
@@ -58,6 +60,7 @@ type AppSidebarProps = {
   userRole?: UserRole;
   userId?: string | null;
   onSelectConversa?: (conversaId: string) => void;
+  onNewChat?: () => void; // callback para resetar o chat na página pai
 };
 
 function formatarData(iso: string) {
@@ -69,6 +72,11 @@ function formatarData(iso: string) {
   });
 }
 
+// Formata para o input date (YYYY-MM-DD)
+function toInputDate(iso: string) {
+  return iso.slice(0, 10);
+}
+
 export function AppSidebar({
   isLogged,
   onOpenLogin,
@@ -77,6 +85,7 @@ export function AppSidebar({
   userRole = "user",
   userId,
   onSelectConversa,
+  onNewChat,
 }: AppSidebarProps) {
   const navigate = useNavigate();
   const { toggleSidebar, isMobile, state } = useSidebar();
@@ -86,23 +95,41 @@ export function AppSidebar({
 
   const [conversas, setConversas] = useState<Conversa[]>([]);
 
-  useEffect(() => {
+  // Estado do modal de pesquisa por período
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+  const [searchResults, setSearchResults] = useState<Conversa[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  // Carrega histórico completo
+  const fetchConversas = () => {
     if (!isLogged || !userId) {
       setConversas([]);
       return;
     }
-
     fetch(`${API_URL}/historico/usuarios/${userId}/conversas`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) setConversas(data);
       })
       .catch(() => setConversas([]));
+  };
+
+  useEffect(() => {
+    fetchConversas();
   }, [isLogged, userId]);
 
   const handleNavigate = (path: string) => {
     navigate(path);
     if (isMobile) toggleSidebar();
+  };
+
+  // Novo chat: reseta o estado e navega para "/"
+  const handleNewChat = () => {
+    onNewChat?.();
+    handleNavigate("/");
   };
 
   const handleLogoutClick = () => {
@@ -113,8 +140,48 @@ export function AppSidebar({
 
   const handleSelectConversa = (conversaId: string) => {
     onSelectConversa?.(conversaId);
+    setSearchOpen(false);
+    setSearchResults(null);
     handleNavigate("/");
   };
+
+  // Pesquisa por período
+  const handleSearch = async () => {
+    if (!userId) return;
+    setIsSearching(true);
+    setSearchError("");
+    setSearchResults(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (dataInicio) params.append("data_inicio", dataInicio);
+      if (dataFim) params.append("data_fim", dataFim);
+
+      const res = await fetch(
+        `${API_URL}/historico/usuarios/${userId}/conversas/filtrar?${params.toString()}`
+      );
+
+      if (!res.ok) throw new Error("Erro na pesquisa");
+
+      const data = await res.json();
+      setSearchResults(Array.isArray(data) ? data : []);
+    } catch {
+      setSearchError("Não foi possível buscar as conversas.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchOpen(false);
+    setSearchResults(null);
+    setDataInicio("");
+    setDataFim("");
+    setSearchError("");
+  };
+
+  // Lista a exibir no histórico (resultado filtrado ou lista completa)
+  const listaExibida = searchResults ?? conversas;
 
   return (
     <Sidebar
@@ -130,7 +197,6 @@ export function AppSidebar({
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
               <Cat className="h-5 w-5 text-zinc-800" />
             </div>
-
             {!isCollapsed && (
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">CatBOT</p>
@@ -157,9 +223,10 @@ export function AppSidebar({
       <SidebarContent className="overflow-y-auto px-2 group-data-[collapsible=icon]:px-2">
         <SidebarGroup>
           <SidebarMenu>
+            {/* Novo Chat */}
             <SidebarMenuItem>
               <SidebarMenuButton
-                onClick={() => handleNavigate("/")}
+                onClick={handleNewChat}
                 className="h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
               >
                 <Plus className="h-5 w-5 shrink-0" />
@@ -167,16 +234,87 @@ export function AppSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
 
+            {/* Procurar chat por período */}
             <SidebarMenuItem>
               <SidebarMenuButton
-                onClick={() => handleNavigate("/")}
-                className="h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                onClick={() => {
+                  if (!isCollapsed) setSearchOpen((prev) => !prev);
+                }}
+                className={`h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 ${
+                  searchOpen ? "bg-white/80" : ""
+                }`}
               >
                 <Search className="h-5 w-5 shrink-0" />
-                {!isCollapsed && <span className="truncate">Procurar um chat</span>}
+                {!isCollapsed && (
+                  <span className="truncate">Procurar um chat</span>
+                )}
               </SidebarMenuButton>
             </SidebarMenuItem>
 
+            {/* Painel de pesquisa por período */}
+            {!isCollapsed && searchOpen && isLogged && (
+              <div className="mx-1 mb-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-600">
+                    <CalendarSearch className="h-3.5 w-3.5" />
+                    Filtrar por período
+                  </span>
+                  <button
+                    onClick={handleClearSearch}
+                    className="text-zinc-400 hover:text-zinc-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <label className="mb-0.5 block text-[10px] text-zinc-500">
+                      De
+                    </label>
+                    <input
+                      type="date"
+                      value={dataInicio}
+                      onChange={(e) => setDataInicio(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-700 outline-none focus:border-[#4a90c2]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-0.5 block text-[10px] text-zinc-500">
+                      Até
+                    </label>
+                    <input
+                      type="date"
+                      value={dataFim}
+                      onChange={(e) => setDataFim(e.target.value)}
+                      className="w-full rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-700 outline-none focus:border-[#4a90c2]"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSearch}
+                  disabled={isSearching || (!dataInicio && !dataFim)}
+                  className="mt-3 w-full rounded-lg bg-[#4a90c2] py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  {isSearching ? "Buscando..." : "Buscar"}
+                </button>
+
+                {searchError && (
+                  <p className="mt-2 text-[10px] text-red-500">{searchError}</p>
+                )}
+
+                {searchResults !== null && (
+                  <p className="mt-2 text-[10px] text-zinc-400">
+                    {searchResults.length === 0
+                      ? "Nenhuma conversa encontrada."
+                      : `${searchResults.length} conversa(s) encontrada(s)`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Admin links */}
             {isLogged && isAdmin && (
               <>
                 <SidebarMenuItem>
@@ -185,7 +323,9 @@ export function AppSidebar({
                     className="h-10 rounded-xl px-3 hover:bg-white/70 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
                   >
                     <LayoutDashboard className="h-5 w-5 shrink-0" />
-                    {!isCollapsed && <span className="truncate">Dashboard</span>}
+                    {!isCollapsed && (
+                      <span className="truncate">Dashboard</span>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
 
@@ -217,17 +357,32 @@ export function AppSidebar({
           </SidebarMenu>
         </SidebarGroup>
 
+        {/* Histórico de conversas */}
         {!isCollapsed && isLogged && (
           <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="px-3 text-xs font-medium text-zinc-500">
-              Seus chats
+            <SidebarGroupLabel className="flex items-center justify-between px-3 text-xs font-medium text-zinc-500">
+              <span>
+                {searchResults !== null ? "Resultados da busca" : "Seus chats"}
+              </span>
+              {searchResults !== null && (
+                <button
+                  onClick={handleClearSearch}
+                  className="text-[10px] text-[#4a90c2] hover:underline"
+                >
+                  ver todos
+                </button>
+              )}
             </SidebarGroupLabel>
 
             <SidebarMenu className="mt-2 space-y-1">
-              {conversas.length === 0 ? (
-                <p className="px-3 text-xs text-zinc-400">Nenhuma conversa ainda.</p>
+              {listaExibida.length === 0 ? (
+                <p className="px-3 text-xs text-zinc-400">
+                  {searchResults !== null
+                    ? "Nenhuma conversa no período."
+                    : "Nenhuma conversa ainda."}
+                </p>
               ) : (
-                conversas.map((conversa) => (
+                listaExibida.map((conversa) => (
                   <SidebarMenuItem key={conversa.id}>
                     <SidebarMenuButton
                       onClick={() => handleSelectConversa(conversa.id)}
@@ -255,7 +410,6 @@ export function AppSidebar({
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm">
                     <User className="h-5 w-5 text-zinc-700" />
                   </div>
-
                   {!isCollapsed && (
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-zinc-900">
@@ -280,7 +434,6 @@ export function AppSidebar({
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
                         onClick={handleLogoutClick}
