@@ -6,6 +6,7 @@ import { AppChat } from "./components/app-chat";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import GerenciarUsuarios from "./pages/users/gerenciar-usuarios";
 import GerenciarBase from "./pages/baseDados/gerenciar-page";
+import Dashboard from "./pages/dashboard/dashboard";
 
 type UserRole = "admin" | "user";
 
@@ -115,6 +116,14 @@ export default function App() {
               element={
                 <main className="flex-1">
                   <GerenciarBase />
+                </main>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <main className="flex-1">
+                  <Dashboard />
                 </main>
               }
             />
