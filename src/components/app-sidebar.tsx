@@ -59,8 +59,9 @@ type AppSidebarProps = {
   userName?: string;
   userRole?: UserRole;
   userId?: string | null;
+  refreshKey?: number; // incrementado pelo App quando uma nova conversa é criada
   onSelectConversa?: (conversaId: string) => void;
-  onNewChat?: () => void; // callback para resetar o chat na página pai
+  onNewChat?: () => void;
 };
 
 function formatarData(iso: string) {
@@ -72,11 +73,6 @@ function formatarData(iso: string) {
   });
 }
 
-// Formata para o input date (YYYY-MM-DD)
-function toInputDate(iso: string) {
-  return iso.slice(0, 10);
-}
-
 export function AppSidebar({
   isLogged,
   onOpenLogin,
@@ -84,6 +80,7 @@ export function AppSidebar({
   userName = "Usuário",
   userRole = "user",
   userId,
+  refreshKey = 0,
   onSelectConversa,
   onNewChat,
 }: AppSidebarProps) {
@@ -103,7 +100,8 @@ export function AppSidebar({
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
 
-  // Carrega histórico completo
+  // Busca o histórico completo.
+  // Depende de isLogged, userId e refreshKey — assim recarrega quando uma nova conversa é criada.
   const fetchConversas = () => {
     if (!isLogged || !userId) {
       setConversas([]);
@@ -119,14 +117,13 @@ export function AppSidebar({
 
   useEffect(() => {
     fetchConversas();
-  }, [isLogged, userId]);
+  }, [isLogged, userId, refreshKey]); // refreshKey garante atualização após nova conversa
 
   const handleNavigate = (path: string) => {
     navigate(path);
     if (isMobile) toggleSidebar();
   };
 
-  // Novo chat: reseta o estado e navega para "/"
   const handleNewChat = () => {
     onNewChat?.();
     handleNavigate("/");

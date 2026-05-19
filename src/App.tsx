@@ -29,8 +29,12 @@ export default function App() {
   });
 
   const [conversaId, setConversaId] = useState<string | null>(null);
-  // chatKey força o AppChat a remontar (reset completo) ao iniciar novo chat
+
+  // chatKey só muda ao clicar em "Novo chat" — não ao navegar entre rotas
   const [chatKey, setChatKey] = useState(0);
+
+  // Incrementado toda vez que uma nova conversa é criada, para a sidebar rebuscar o histórico
+  const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
 
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -75,6 +79,11 @@ export default function App() {
     setChatKey((k) => k + 1);
   };
 
+  // Chamado pelo AppChat quando uma nova conversa é criada no backend
+  const handleConversaCriada = () => {
+    setSidebarRefreshKey((k) => k + 1);
+  };
+
   return (
     <BrowserRouter>
       <SidebarProvider>
@@ -84,6 +93,7 @@ export default function App() {
             userRole={userRole}
             userName={userName}
             userId={userId}
+            refreshKey={sidebarRefreshKey}
             onOpenLogin={() => setLoginOpen(true)}
             onLogout={handleLogout}
             onSelectConversa={(id) => setConversaId(id)}
@@ -100,6 +110,7 @@ export default function App() {
                   userId={userId}
                   conversaId={conversaId}
                   onConversaIdChange={setConversaId}
+                  onConversaCriada={handleConversaCriada}
                 />
               }
             />

@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { SendHorizontal, ThumbsUp, ThumbsDown, Printer, MessageSquare, X, Send } from "lucide-react";
+import { SendHorizontal, Printer, MessageSquare, X, Send, Star } from "lucide-react";
 
 const API_URL = "http://localhost:8000/api/v1";
-
-type Feedback = "like" | "dislike" | null;
 
 type Message = {
   id: number;
@@ -17,6 +15,7 @@ interface AppChatProps {
   userId: string | null;
   conversaId: string | null;
   onConversaIdChange: (id: string | null) => void;
+  onConversaCriada?: () => void; // avisa o App que uma nova conversa foi criada → sidebar atualiza
 }
 
 function uuidv4() {
@@ -26,17 +25,66 @@ function uuidv4() {
   });
 }
 
+// --- Star Rating ---
+function StarRating({
+  nota,
+  onRate,
+  disabled,
+}: {
+  nota: number | null;
+  onRate: (n: number) => void;
+  disabled: boolean;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const active = hovered ?? nota ?? 0;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          disabled={disabled}
+          onClick={() => onRate(n)}
+          onMouseEnter={() => setHovered(n)}
+          onMouseLeave={() => setHovered(null)}
+          title={`${n} estrela${n > 1 ? "s" : ""}`}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: disabled ? "default" : "pointer",
+            padding: "2px",
+            lineHeight: 1,
+            transition: "transform 0.1s",
+            transform: hovered === n ? "scale(1.25)" : "scale(1)",
+          }}
+        >
+          <Star
+            size={14}
+            strokeWidth={1.8}
+            style={{
+              color: n <= active ? "#f59e0b" : "#d1d5db",
+              fill: n <= active ? "#f59e0b" : "none",
+              transition: "color 0.15s, fill 0.15s",
+            }}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AppChat({
   isLogged,
   userId,
   conversaId,
   onConversaIdChange,
+  onConversaCriada,
 }: AppChatProps) {
   const [inputValue, setInputValue] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [feedbacks, setFeedbacks] = useState<Record<number, Feedback>>({});
+  const [notas, setNotas] = useState<Record<number, number>>({});
   const [openComment, setOpenComment] = useState<number | null>(null);
   const [commentValues, setCommentValues] = useState<Record<number, string>>({});
   const [sendingFeedback, setSendingFeedback] = useState<Record<number, boolean>>({});
@@ -45,16 +93,14 @@ export function AppChat({
 
   const hasMessages = messages.length > 0;
 
-  // Quando conversaId muda (selecionado da sidebar), busca as mensagens
+  // Carrega histórico quando conversaId muda (ex: clicar em conversa da sidebar)
   useEffect(() => {
     if (!conversaId) {
       setMessages([]);
       return;
     }
-
     setIsLoadingHistory(true);
     setMessages([]);
-
     fetch(`${API_URL}/historico/conversas/${conversaId}`)
       .then((res) => {
         if (!res.ok) throw new Error();
@@ -86,45 +132,56 @@ export function AppChat({
       .finally(() => setIsLoadingHistory(false));
   }, [conversaId]);
 
-  // Scroll automático
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendAvaliacao = async (
     messageId: number,
-    nota: 1 | 0,
+    nota: number,
     comentario: string,
     mensagemUUID: string
   ) => {
     if (!userId) return;
     setSendingFeedback((prev) => ({ ...prev, [messageId]: true }));
     try {
-      await fetch(`${API_URL}/avaliacoes`, {
+      const body = {
+        mensagem_id: mensagemUUID,
+        usuario_id: userId,
+        nota,
+        comentario,
+      };
+      const res = await fetch(`${API_URL}/avaliacoes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mensagem_id: mensagemUUID, usuario_id: userId, nota, comentario }),
+        body: JSON.stringify(body),
       });
-    } catch {
-      // falha silenciosa
+      if (!res.ok) console.error("[avaliacao] erro", res.status, await res.text());
+    } catch (e) {
+      console.error("[avaliacao] falha de rede", e);
     } finally {
       setSendingFeedback((prev) => ({ ...prev, [messageId]: false }));
     }
   };
 
-  const handleFeedback = async (message: Message, type: "like" | "dislike") => {
-    const previous = feedbacks[message.id];
-    const newType = previous === type ? null : type;
-    setFeedbacks((prev) => ({ ...prev, [message.id]: newType }));
-    if (newType !== null) {
-      const nota = newType === "like" ? 1 : 0;
-      await sendAvaliacao(message.id, nota as 1 | 0, commentValues[message.id] ?? "", message.mensagemUUID ?? uuidv4());
-    }
+  const handleRate = async (message: Message, nota: number) => {
+    setNotas((prev) => ({ ...prev, [message.id]: nota }));
+    await sendAvaliacao(
+      message.id,
+      nota,
+      commentValues[message.id] ?? "",
+      message.mensagemUUID ?? uuidv4()
+    );
   };
 
   const handleSendComment = async (message: Message) => {
-    const nota: 1 | 0 = feedbacks[message.id] === "dislike" ? 0 : 1;
-    await sendAvaliacao(message.id, nota, commentValues[message.id] ?? "", message.mensagemUUID ?? uuidv4());
+    const nota = notas[message.id] ?? 5;
+    await sendAvaliacao(
+      message.id,
+      nota,
+      commentValues[message.id] ?? "",
+      message.mensagemUUID ?? uuidv4()
+    );
     setOpenComment(null);
   };
 
@@ -142,6 +199,7 @@ export function AppChat({
     try {
       let idConversa = conversaId;
 
+      // Se não há conversa ativa, cria uma nova
       if (!idConversa) {
         const iniciar = await fetch(`${API_URL}/chat/iniciar`, {
           method: "POST",
@@ -152,6 +210,9 @@ export function AppChat({
         const iniciarData = await iniciar.json();
         idConversa = iniciarData.conversa_id;
         onConversaIdChange(idConversa);
+
+        // Avisa o App que uma conversa nova foi criada → sidebar rebusca o histórico
+        onConversaCriada?.();
       }
 
       const res = await fetch(`${API_URL}/chat/perguntar`, {
@@ -160,21 +221,26 @@ export function AppChat({
         body: JSON.stringify({ conversa_id: idConversa, texto: text }),
       });
       if (!res.ok) throw new Error();
-
       const data = await res.json();
+
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           role: "assistant",
-          content: data.resposta ?? data.texto ?? data.content ?? JSON.stringify(data),
+          content:
+            data.resposta ?? data.texto ?? data.content ?? JSON.stringify(data),
           mensagemUUID: data.mensagem_id ?? data.id ?? undefined,
         },
       ]);
     } catch {
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 1, role: "assistant", content: "Erro ao conectar com o servidor. Tente novamente." },
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "Erro ao conectar com o servidor. Tente novamente.",
+        },
       ]);
     } finally {
       setIsSending(false);
@@ -208,9 +274,7 @@ export function AppChat({
             <>
               <div className="pt-16 text-center">
                 <h1 className="font-mono text-[56px] font-black leading-[1.15] text-black">
-                  Bem vindo(a)!
-                  <br />
-                  ao CatBot
+                  Bem vindo(a)!<br />ao CatBot
                 </h1>
               </div>
               <div className="flex flex-1 items-center justify-center px-4">
@@ -237,15 +301,23 @@ export function AppChat({
 
           ) : (
             <>
-              <div id="print-area" ref={printRef} className="mb-6 flex-1 space-y-4 overflow-y-auto pt-6">
+              <div
+                id="print-area"
+                ref={printRef}
+                className="mb-6 flex-1 space-y-4 overflow-y-auto pt-6"
+              >
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex flex-col ${message.role === "user" ? "items-end" : "items-start"}`}
+                    className={`flex flex-col ${
+                      message.role === "user" ? "items-end" : "items-start"
+                    }`}
                   >
                     <div
                       className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                        message.role === "user" ? "bg-[#4a90c2] text-white" : "bg-white text-neutral-800"
+                        message.role === "user"
+                          ? "bg-[#4a90c2] text-white"
+                          : "bg-white text-neutral-800"
                       }`}
                     >
                       {message.content}
@@ -253,34 +325,34 @@ export function AppChat({
 
                     {message.role === "assistant" && (
                       <div className="no-print mt-1 flex flex-col gap-1 px-1">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleFeedback(message, "like")}
-                            title="Gostei"
-                            disabled={sendingFeedback[message.id]}
-                            className={`rounded-md p-1 transition-colors ${feedbacks[message.id] === "like" ? "text-[#4a90c2]" : "text-neutral-400 hover:text-neutral-600"}`}
-                          >
-                            <ThumbsUp className="h-3.5 w-3.5" strokeWidth={2} fill={feedbacks[message.id] === "like" ? "currentColor" : "none"} />
-                          </button>
+                        <div className="flex items-center gap-2">
+                          <StarRating
+                            nota={notas[message.id] ?? null}
+                            onRate={(n) => handleRate(message, n)}
+                            disabled={sendingFeedback[message.id] ?? false}
+                          />
 
                           <button
-                            onClick={() => handleFeedback(message, "dislike")}
-                            title="Não gostei"
-                            disabled={sendingFeedback[message.id]}
-                            className={`rounded-md p-1 transition-colors ${feedbacks[message.id] === "dislike" ? "text-red-400" : "text-neutral-400 hover:text-neutral-600"}`}
-                          >
-                            <ThumbsDown className="h-3.5 w-3.5" strokeWidth={2} fill={feedbacks[message.id] === "dislike" ? "currentColor" : "none"} />
-                          </button>
-
-                          <button
-                            onClick={() => setOpenComment(openComment === message.id ? null : message.id)}
+                            onClick={() =>
+                              setOpenComment(
+                                openComment === message.id ? null : message.id
+                              )
+                            }
                             title="Comentar"
-                            className={`rounded-md p-1 transition-colors ${openComment === message.id ? "text-[#4a90c2]" : "text-neutral-400 hover:text-neutral-600"}`}
+                            className={`rounded-md p-1 transition-colors ${
+                              openComment === message.id
+                                ? "text-[#4a90c2]"
+                                : "text-neutral-400 hover:text-neutral-600"
+                            }`}
                           >
                             <MessageSquare className="h-3.5 w-3.5" strokeWidth={2} />
                           </button>
 
-                          <button onClick={handlePrint} title="Imprimir conversa" className="rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-600">
+                          <button
+                            onClick={handlePrint}
+                            title="Imprimir conversa"
+                            className="rounded-md p-1 text-neutral-400 transition-colors hover:text-neutral-600"
+                          >
                             <Printer className="h-3.5 w-3.5" strokeWidth={2} />
                           </button>
                         </div>
@@ -291,7 +363,12 @@ export function AppChat({
                               autoFocus
                               type="text"
                               value={commentValues[message.id] ?? ""}
-                              onChange={(e) => setCommentValues((prev) => ({ ...prev, [message.id]: e.target.value }))}
+                              onChange={(e) =>
+                                setCommentValues((prev) => ({
+                                  ...prev,
+                                  [message.id]: e.target.value,
+                                }))
+                              }
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") handleSendComment(message);
                                 if (e.key === "Escape") setOpenComment(null);
@@ -299,10 +376,17 @@ export function AppChat({
                               placeholder="Deixe um comentário..."
                               className="flex-1 bg-transparent text-xs text-neutral-700 outline-none placeholder:text-neutral-400"
                             />
-                            <button onClick={() => handleSendComment(message)} disabled={sendingFeedback[message.id]} className="text-[#4a90c2] disabled:opacity-40">
+                            <button
+                              onClick={() => handleSendComment(message)}
+                              disabled={sendingFeedback[message.id]}
+                              className="text-[#4a90c2] disabled:opacity-40"
+                            >
                               <Send className="h-3 w-3" strokeWidth={2} />
                             </button>
-                            <button onClick={() => setOpenComment(null)} className="text-neutral-400 hover:text-neutral-600">
+                            <button
+                              onClick={() => setOpenComment(null)}
+                              className="text-neutral-400 hover:text-neutral-600"
+                            >
                               <X className="h-3 w-3" strokeWidth={2} />
                             </button>
                           </div>
