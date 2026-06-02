@@ -32,7 +32,7 @@ async function fetchAllAvaliacoes(): Promise<Avaliacao[]> {
 
   while (true) {
     const res = await fetch(
-      `http://localhost:8080/api/v1/avaliacoes?skip=${page * size}&limit=${size}`
+      `http://localhost:8000/api/v1/avaliacoes?skip=${page * size}&limit=${size}`
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
