@@ -27,7 +27,6 @@ import {
   MoreHorizontal,
   LogOut,
   X,
-  CalendarSearch,
 } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
@@ -38,11 +37,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 
 const API_URL = "http://localhost:8000/api/v1";
 
 type UserRole = "admin" | "user";
+
+type Mensagem = {
+  id: string;
+  conversa_id: string;
+  conteudo: string;
+  tipo_remetente: "usuario" | "bot";
+  status_validacao: string;
+  criado_em: string;
+};
 
 type Conversa = {
   id: string;
@@ -50,6 +58,9 @@ type Conversa = {
   status_sucesso: boolean;
   iniciado_em: string;
   encerrado_em: string | null;
+  preview?: string;
+  loading?: boolean;
+  mensagens?: Mensagem[]; // Armazenar mensagens para busca
 };
 
 type AppSidebarProps = {
@@ -59,10 +70,13 @@ type AppSidebarProps = {
   userName?: string;
   userRole?: UserRole;
   userId?: string | null;
-  refreshKey?: number; // incrementado pelo App quando uma nova conversa é criada
+  refreshKey?: number;
   onSelectConversa?: (conversaId: string) => void;
   onNewChat?: () => void;
 };
+
+// Cache para dados completos das conversas
+const conversasCache = new Map<string, { preview: string; mensagens: Mensagem[] }>();
 
 function formatarData(iso: string) {
   const date = new Date(iso);
@@ -71,6 +85,65 @@ function formatarData(iso: string) {
     month: "2-digit",
     year: "2-digit",
   });
+}
+
+// Componente para item do histórico
+function HistoricoItem({ 
+  conversa, 
+  onSelect,
+  searchTerm = ""
+}: { 
+  conversa: Conversa; 
+  onSelect: (id: string) => void;
+  searchTerm?: string;
+}) {
+  const dataFormatada = formatarData(conversa.iniciado_em);
+  
+  // Função para destacar o texto pesquisado
+  const highlightText = (text: string, term: string) => {
+    if (!term.trim()) return text;
+    
+    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    
+    return parts.map((part, index) => 
+      regex.test(part) ? (
+        <mark key={index} className="bg-yellow-200 rounded px-0.5">
+          {part}
+        </mark>
+      ) : (
+        part
+      )
+    );
+  };
+  
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        onClick={() => onSelect(conversa.id)}
+        className="h-auto min-h-10 rounded-xl px-3 py-2 hover:bg-white/70"
+      >
+        <MessageSquare className="h-4 w-4 shrink-0 mt-0.5" />
+        <div className="min-w-0 flex-1">
+          {conversa.loading ? (
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 animate-pulse rounded-full bg-zinc-300"></div>
+              <p className="text-sm text-zinc-400">Carregando...</p>
+            </div>
+          ) : (
+            <>
+              <p className="truncate text-sm font-medium">
+                {searchTerm ? highlightText(conversa.preview || "Conversa sem mensagens", searchTerm) : (conversa.preview || "Conversa sem mensagens")}
+              </p>
+              <p className="text-xs text-zinc-400">
+                {dataFormatada}
+              </p>
+            </>
+          )}
+        </div>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
 }
 
 export function AppSidebar({
@@ -91,91 +164,198 @@ export function AppSidebar({
   const isAdmin = userRole === "admin";
 
   const [conversas, setConversas] = useState<Conversa[]>([]);
+  const [conversasComMensagens, setConversasComMensagens] = useState<Conversa[]>([]);
 
-  // Estado do modal de pesquisa por período
+  // Estado da busca por texto
   const [searchOpen, setSearchOpen] = useState(false);
-  const [dataInicio, setDataInicio] = useState("");
-  const [dataFim, setDataFim] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<Conversa[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState("");
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Busca o histórico completo.
-  // Depende de isLogged, userId e refreshKey — assim recarrega quando uma nova conversa é criada.
-  const fetchConversas = () => {
+  // Função para buscar mensagens de uma conversa
+  const fetchMensagensConversa = useCallback(async (conversaId: string): Promise<Mensagem[]> => {
+    try {
+      const response = await fetch(`${API_URL}/historico/conversas/${conversaId}`);
+      if (!response.ok) return [];
+      
+      const data = await response.json();
+      return data.mensagens || [];
+    } catch (error) {
+      console.error(`Erro ao buscar mensagens da conversa ${conversaId}:`, error);
+      return [];
+    }
+  }, []);
+
+  // Função para buscar preview e mensagens de uma conversa
+  const fetchDetalhesConversa = useCallback(async (conversa: Conversa): Promise<Conversa> => {
+    // Verifica cache primeiro
+    if (conversasCache.has(conversa.id)) {
+      const cached = conversasCache.get(conversa.id)!;
+      return {
+        ...conversa,
+        preview: cached.preview,
+        mensagens: cached.mensagens,
+        loading: false
+      };
+    }
+    
+    try {
+      const mensagens = await fetchMensagensConversa(conversa.id);
+      
+      // Busca a primeira mensagem do usuário para o preview
+      const primeiraMensagem = mensagens.find(
+        (msg) => msg.tipo_remetente === "usuario"
+      );
+      
+      let preview = "Conversa sem mensagens";
+      if (primeiraMensagem?.conteudo) {
+        const conteudo = primeiraMensagem.conteudo;
+        preview = conteudo.length > 60 ? conteudo.substring(0, 60) + "..." : conteudo;
+      }
+      
+      // Salva no cache
+      conversasCache.set(conversa.id, { preview, mensagens });
+      
+      return {
+        ...conversa,
+        preview,
+        mensagens,
+        loading: false
+      };
+    } catch (error) {
+      console.error(`Erro ao buscar detalhes da conversa ${conversa.id}:`, error);
+      return {
+        ...conversa,
+        preview: "Erro ao carregar",
+        mensagens: [],
+        loading: false
+      };
+    }
+  }, [fetchMensagensConversa]);
+
+  // Busca o histórico completo
+  const fetchConversas = useCallback(async () => {
     if (!isLogged || !userId) {
       setConversas([]);
+      setConversasComMensagens([]);
       return;
     }
-    fetch(`${API_URL}/historico/usuarios/${userId}/conversas`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setConversas(data);
-      })
-      .catch(() => setConversas([]));
-  };
+
+    try {
+      const response = await fetch(`${API_URL}/historico/usuarios/${userId}/conversas`);
+      const data = await response.json();
+      
+      if (Array.isArray(data)) {
+        // Primeiro, seta as conversas sem detalhes (com loading)
+        const conversasIniciais = data.map((conversa: Conversa) => ({
+          ...conversa,
+          preview: "Carregando...",
+          loading: true
+        }));
+        setConversas(conversasIniciais);
+        
+        // Depois, busca os detalhes de cada conversa
+        const conversasComDetalhes = await Promise.all(
+          data.map((conversa: Conversa) => fetchDetalhesConversa(conversa))
+        );
+        setConversas(conversasComDetalhes);
+        setConversasComMensagens(conversasComDetalhes);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar conversas:", error);
+      setConversas([]);
+      setConversasComMensagens([]);
+    }
+  }, [isLogged, userId, fetchDetalhesConversa]);
 
   useEffect(() => {
     fetchConversas();
-  }, [isLogged, userId, refreshKey]); // refreshKey garante atualização após nova conversa
+  }, [fetchConversas, refreshKey]);
 
-  const handleNavigate = (path: string) => {
+  // Função de busca local por texto
+  const searchLocal = useCallback((termo: string) => {
+    if (!termo.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    setIsSearching(true);
+    
+    // Simula um pequeno delay para dar feedback visual
+    setTimeout(() => {
+      const termoLower = termo.toLowerCase().trim();
+      
+      const resultados = conversasComMensagens.filter(conversa => {
+        // Busca no preview
+        if (conversa.preview?.toLowerCase().includes(termoLower)) {
+          return true;
+        }
+        
+        // Busca nas mensagens
+        if (conversa.mensagens) {
+          return conversa.mensagens.some(msg => 
+            msg.conteudo.toLowerCase().includes(termoLower)
+          );
+        }
+        
+        return false;
+      });
+      
+      setSearchResults(resultados);
+      setIsSearching(false);
+    }, 300);
+  }, [conversasComMensagens]);
+
+  // Debounce para busca enquanto digita
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    
+    // Limpa o timeout anterior
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Debounce de 500ms
+    searchTimeoutRef.current = setTimeout(() => {
+      searchLocal(value);
+    }, 500);
+  };
+
+  const handleClearSearch = () => {
+    setSearchOpen(false);
+    setSearchTerm("");
+    setSearchResults(null);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+  };
+
+  const handleNavigate = useCallback((path: string) => {
     navigate(path);
     if (isMobile) toggleSidebar();
-  };
+  }, [navigate, isMobile, toggleSidebar]);
 
   const handleNewChat = () => {
     onNewChat?.();
     handleNavigate("/");
+    // Limpa a busca ao criar novo chat
+    handleClearSearch();
   };
 
   const handleLogoutClick = () => {
+    conversasCache.clear(); // Limpa o cache ao deslogar
     onLogout();
     if (isMobile) toggleSidebar();
     navigate("/");
   };
 
-  const handleSelectConversa = (conversaId: string) => {
+  const handleSelectConversa = useCallback((conversaId: string) => {
     onSelectConversa?.(conversaId);
-    setSearchOpen(false);
-    setSearchResults(null);
+    handleClearSearch();
     handleNavigate("/");
-  };
-
-  // Pesquisa por período
-  const handleSearch = async () => {
-    if (!userId) return;
-    setIsSearching(true);
-    setSearchError("");
-    setSearchResults(null);
-
-    try {
-      const params = new URLSearchParams();
-      if (dataInicio) params.append("data_inicio", dataInicio);
-      if (dataFim) params.append("data_fim", dataFim);
-
-      const res = await fetch(
-        `${API_URL}/historico/usuarios/${userId}/conversas/filtrar?${params.toString()}`
-      );
-
-      if (!res.ok) throw new Error("Erro na pesquisa");
-
-      const data = await res.json();
-      setSearchResults(Array.isArray(data) ? data : []);
-    } catch {
-      setSearchError("Não foi possível buscar as conversas.");
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleClearSearch = () => {
-    setSearchOpen(false);
-    setSearchResults(null);
-    setDataInicio("");
-    setDataFim("");
-    setSearchError("");
-  };
+  }, [onSelectConversa, handleNavigate]);
 
   // Lista a exibir no histórico (resultado filtrado ou lista completa)
   const listaExibida = searchResults ?? conversas;
@@ -231,7 +411,7 @@ export function AppSidebar({
               </SidebarMenuButton>
             </SidebarMenuItem>
 
-            {/* Procurar chat por período */}
+            {/* Buscar chat por texto */}
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => {
@@ -243,18 +423,18 @@ export function AppSidebar({
               >
                 <Search className="h-5 w-5 shrink-0" />
                 {!isCollapsed && (
-                  <span className="truncate">Procurar um chat</span>
+                  <span className="truncate">Buscar conversa</span>
                 )}
               </SidebarMenuButton>
             </SidebarMenuItem>
 
-            {/* Painel de pesquisa por período */}
+            {/* Painel de busca por texto */}
             {!isCollapsed && searchOpen && isLogged && (
               <div className="mx-1 mb-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="flex items-center gap-1.5 text-xs font-medium text-zinc-600">
-                    <CalendarSearch className="h-3.5 w-3.5" />
-                    Filtrar por período
+                    <Search className="h-3.5 w-3.5" />
+                    Buscar por texto
                   </span>
                   <button
                     onClick={handleClearSearch}
@@ -264,47 +444,28 @@ export function AppSidebar({
                   </button>
                 </div>
 
-                <div className="space-y-2">
-                  <div>
-                    <label className="mb-0.5 block text-[10px] text-zinc-500">
-                      De
-                    </label>
-                    <input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => setDataInicio(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-700 outline-none focus:border-[#4a90c2]"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-0.5 block text-[10px] text-zinc-500">
-                      Até
-                    </label>
-                    <input
-                      type="date"
-                      value={dataFim}
-                      onChange={(e) => setDataFim(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 px-2 py-1 text-xs text-zinc-700 outline-none focus:border-[#4a90c2]"
-                    />
-                  </div>
+                <div>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    placeholder="Digite o texto para buscar..."
+                    className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-700 outline-none placeholder:text-zinc-400 focus:border-[#4a90c2]"
+                    autoFocus
+                  />
                 </div>
 
-                <button
-                  onClick={handleSearch}
-                  disabled={isSearching || (!dataInicio && !dataFim)}
-                  className="mt-3 w-full rounded-lg bg-[#4a90c2] py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  {isSearching ? "Buscando..." : "Buscar"}
-                </button>
-
-                {searchError && (
-                  <p className="mt-2 text-[10px] text-red-500">{searchError}</p>
+                {isSearching && (
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4a90c2] border-t-transparent"></div>
+                    <p className="text-xs text-zinc-500">Buscando...</p>
+                  </div>
                 )}
 
-                {searchResults !== null && (
-                  <p className="mt-2 text-[10px] text-zinc-400">
+                {searchResults !== null && !isSearching && searchTerm && (
+                  <p className="mt-2 text-xs text-zinc-400">
                     {searchResults.length === 0
-                      ? "Nenhuma conversa encontrada."
+                      ? `Nenhuma conversa encontrada com "${searchTerm}"`
                       : `${searchResults.length} conversa(s) encontrada(s)`}
                   </p>
                 )}
@@ -375,22 +536,17 @@ export function AppSidebar({
               {listaExibida.length === 0 ? (
                 <p className="px-3 text-xs text-zinc-400">
                   {searchResults !== null
-                    ? "Nenhuma conversa no período."
+                    ? `Nenhuma conversa encontrada${searchTerm ? ` para "${searchTerm}"` : ""}.`
                     : "Nenhuma conversa ainda."}
                 </p>
               ) : (
                 listaExibida.map((conversa) => (
-                  <SidebarMenuItem key={conversa.id}>
-                    <SidebarMenuButton
-                      onClick={() => handleSelectConversa(conversa.id)}
-                      className="h-10 rounded-xl px-3 hover:bg-white/70"
-                    >
-                      <MessageSquare className="h-5 w-5 shrink-0" />
-                      <span className="truncate">
-                        Chat de {formatarData(conversa.iniciado_em)}
-                      </span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <HistoricoItem
+                    key={conversa.id}
+                    conversa={conversa}
+                    onSelect={handleSelectConversa}
+                    searchTerm={searchTerm}
+                  />
                 ))
               )}
             </SidebarMenu>
